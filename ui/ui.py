@@ -291,6 +291,18 @@ class Main(QMainWindow):
         proc_btn.clicked.connect(self.process_hdng)
         layout.addWidget(proc_btn)
 
+        proc_mf_btn = QPushButton("PROCESS MF TRANSACTIONS")
+        proc_mf_btn.setStyleSheet("""
+            background-color: #f59e0b;
+            color: white;
+            font-weight: bold;
+            padding: 3px 10px;
+            border-radius: 5px;
+        """)
+        proc_mf_btn.clicked.connect(self.process_hdng)
+        layout.addWidget(proc_mf_btn)
+        
+        
         generate_report_btn = QPushButton("GENERATE REPORT")
         generate_report_btn.setStyleSheet("""
             background-color: #8b5cf6;

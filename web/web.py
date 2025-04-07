@@ -185,6 +185,141 @@ class Scraper:
             print(f"error downloading for {code}: {e}")
             return False
     
+    def dl_mf_transactions(self, code):
+        try:
+            print(f"navigating to MF transactions for {code}")
+            wait = WebDriverWait(self.driver, 10)
+            reports_menu = wait.until(EC.element_to_be_clickable((
+                By.XPATH, "//span[contains(text(),'Reports')]")))
+            reports_menu.click()
+
+            time.sleep(2)
+            mf_trans = wait.until(EC.element_to_be_clickable((
+                By.LINK_TEXT, "MF Transaction Report")))
+            mf_trans.click()
+
+            time.sleep(3)
+            try:
+                from_date = wait.until(EC.presence_of_element_located((By.ID, "MainContent_txtFromDate")))
+                to_date = wait.until(EC.presence_of_element_located((By.ID, "MainContent_txtToDate")))
+            except:
+                print("Date range fields not found or not needed")
+
+            try:
+                generate_btn = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_btnGenerateReport")))
+                generate_btn.click()
+                time.sleep(3)  
+            except:
+                print("Generate report button not found or not needed")
+
+            print("downloading MF transactions")
+            # Click Excel export button, assuming it has a similar ID to the holdings page
+            excel_btn = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_imgExcel")))
+            excel_btn.click()
+
+            time.sleep(4)
+        
+            files = sorted(
+                [f for f in os.listdir(self.dl_folder) 
+                    if f.endswith(".xls") or f.endswith(".xlsx")],
+                key=lambda x: os.path.getmtime(os.path.join(self.dl_folder, x)),
+                reverse=True
+            )
+
+            if files:
+                latest = os.path.join(self.dl_folder, files[0])
+                new_name = os.path.join(self.dl_folder, f"{code}_MFTrans.xlsx")
+                os.rename(latest, new_name)
+                print(f"MF transactions saved as: {new_name}")
+                return True
+            
+            else:
+                print(f"no file found for {code} MF transactions")
+                return False
+
+        except Exception as e:
+            print(f"error downloading MF transactions for {code}: {e}")
+            return False
+        
+    def search_client_mf_trans(self, code):
+        print(f"processing client MF transactions: {code}")
+        wait = WebDriverWait(self.driver, 10)
+
+        init_tabs = self.driver.window_handles
+        if len(init_tabs) > 1:
+            self.driver.switch_to.window(init_tabs[1])
+
+        try:
+            search = wait.until(EC.presence_of_element_located((By.ID, "UCBanner_txtSearch")))
+            search.clear()
+            search.send_keys(code)
+            print(f"entering client code: {code}")
+
+            sugg = self.driver.find_element(By.CLASS_NAME, "ui-menu-item")
+            sugg.click()
+
+            time.sleep(3)
+            new_tabs = self.driver.window_handles
+        
+            if len(new_tabs) > len(init_tabs):
+                prof_tab = new_tabs[-1]
+                self.driver.switch_to.window(prof_tab)
+                print("switched to the client profile tab.")
+
+                reports_btn = wait.until(EC.element_to_be_clickable((
+                    By.XPATH, "//a[contains(text(),'Reports')]")))
+                reports_btn.click()
+
+                time.sleep(3)
+                dash_tabs = self.driver.window_handles
+            
+                if len(dash_tabs) > len(new_tabs):
+                    dash_tab = dash_tabs[-1]
+                    self.driver.switch_to.window(dash_tab)
+                    print("switched to the client reports tab.")
+
+                    self.driver.switch_to.window(prof_tab)
+                    self.driver.close()
+                    print("closed client profile tab.")
+
+                    self.driver.switch_to.window(dash_tab)
+                
+                    result = self.dl_mf_transactions(code)
+                
+                    self.driver.close()
+                    self.driver.switch_to.window(init_tabs[1])
+                    print("closed client tab and returned to search tab.")
+                
+                    return result
+
+            print(f"no new client dashboard tab opened for {code}")
+            return False
+
+        except Exception as e:
+            print(f"error processing MF transactions for {code}: {str(e)}")
+            return False
+
+    def process_all_clients_mf_trans(self, codes, update_cb=None):
+        success = 0
+        self.fail_list = []
+    
+        for i in range(0, len(codes), self.max_parallel):
+            batch = codes[i:i+self.max_parallel]
+            print(f"processing MF transactions batch: {batch}")
+        
+            for code in batch:
+                if self.search_client_mf_trans(code):
+                    success += 1
+                else:
+                    self.fail_list.append(code)
+            
+                if update_cb:
+                    update_cb(success, len(codes), self.fail_list)
+                
+            time.sleep(5)
+    
+        return success, self.fail_list
+    
     def quit(self):
         if self.driver:
             self.driver.quit()
