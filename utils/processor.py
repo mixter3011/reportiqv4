@@ -99,9 +99,9 @@ class Processor:
         
         return eq, debt, gold, cash
 
-    def process_file(self, path):
+    def process_holdings_file(self, path):
         try:
-            self.log(f"Processing file: {os.path.basename(path)}")
+            self.log(f"📂 Processing file: {os.path.basename(path)}")
             df = pd.read_excel(path, header=None, engine='openpyxl')
             
             if df.empty or df.shape[1] < 2:
@@ -163,26 +163,26 @@ class Processor:
             
             port_val = eq_total + mf_total + bond_total
             
-            self.log(f"Processed {path}: Value: {port_val}, Equity: {eq}, Debt: {debt}, Gold: {gold}, Cash: {cash}")
+            self.log(f"✅ Processed {path}: Value: {port_val}, Equity: {eq}, Debt: {debt}, Gold: {gold}, Cash: {cash}")
             
             return [os.path.basename(path).replace(".xlsx", ""), port_val, eq, debt, gold, cash]
         
         except Exception as e:
-            self.log(f"Error processing {path}: {e}")
+            self.log(f"❌ Error processing {path}: {e}")
             return None
 
-    def run(self):
-        self.log(f"Processing holdings from: {self.folder}")
+    def process_holdings(self):
+        self.log(f"📊 Processing holdings from: {self.folder}")
         
         data = []
         for file in os.listdir(self.folder):
-            if file.endswith(".xlsx") and not file.startswith("~$"):
+            if file.endswith(".xlsx") and not file.startswith("~$") and not "Consolidated" in file:
                 path = os.path.join(self.folder, file)
-                result = self.process_file(path)
+                result = self.process_holdings_file(path)
                 if result:
                     data.append(result)
                 else:
-                    self.log(f"Skipped file: {file}")
+                    self.log(f"⚠️ Skipped file: {file}")
         
         if data:
             out_file = os.path.join(self.folder, "Consolidated_Holdings.xlsx")
@@ -193,7 +193,7 @@ class Processor:
             
             df["Portfolio Value"] = df["Portfolio Value"].apply(lambda x: f"{int(x):,}")
             
-            portval = df["Portfolio Value"].replace(',', '', regex=True).astype(float)
+            portval = df["Portfolio Value"].str.replace(',', '', regex=True).astype(float)
             df["Equity (%)"] = (df["Equity"] / portval) * 100
             df["Debt (%)"] = (df["Debt"] / portval) * 100
             df["Gold (%)"] = (df["Gold"] / portval) * 100
@@ -205,10 +205,10 @@ class Processor:
             
             df.to_excel(out_file, index=False)
             
-            self.log(f"Consolidated report saved: {out_file}")
+            self.log(f"✅ Consolidated report saved: {out_file}")
             return out_file
             
-        self.log("No valid holdings files found for processing.")
+        self.log("⚠️ No valid holdings files found for processing.")
         return None
     
     def set_required_files(self, ledger=None, mf_transactions=None, sip=None):
@@ -216,14 +216,14 @@ class Processor:
         self.mf_transactions_path = mf_transactions
         self.sip_path = sip
     
-    def run_mf_transactions(self):
-        self.log(f"Processing MF transactions from: {self.folder}")
+    def process_mf_transactions(self):
+        self.log(f"📊 Processing MF transactions from: {self.folder}")
     
         if not self.mf_transactions_path or not self.sip_path:
-            self.log("Missing required files for MF transactions processing")
+            self.log("❌ Missing required files for MF transactions processing")
             return None
     
         out_file = os.path.join(self.folder, "Consolidated_MF_Transactions.xlsx")
     
-        self.log(f"MF transactions report saved: {out_file}")
+        self.log(f"✅ MF transactions report saved: {out_file}")
         return out_file

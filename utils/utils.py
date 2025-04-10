@@ -1,9 +1,9 @@
 import os
+import sys
 import time
 import pandas as pd
 
 def get_base_path():
-    import sys
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     else:
@@ -51,3 +51,13 @@ def wait_for_download(folder, timeout=30):
             return True
         time.sleep(0.5)
     return False
+
+def setup_download_folder():
+    base_path = get_base_path()
+    
+    download_folder = os.path.join(base_path, "Holding")
+    
+    if not os.path.exists(download_folder):
+        os.makedirs(download_folder)
+    
+    return download_folder
