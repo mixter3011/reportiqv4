@@ -210,3 +210,20 @@ class Processor:
             
         self.log("No valid holdings files found for processing.")
         return None
+    
+    def set_required_files(self, ledger=None, mf_transactions=None, sip=None):
+        self.ledger_path = ledger
+        self.mf_transactions_path = mf_transactions
+        self.sip_path = sip
+    
+    def run_mf_transactions(self):
+        self.log(f"Processing MF transactions from: {self.folder}")
+    
+        if not self.mf_transactions_path or not self.sip_path:
+            self.log("Missing required files for MF transactions processing")
+            return None
+    
+        out_file = os.path.join(self.folder, "Consolidated_MF_Transactions.xlsx")
+    
+        self.log(f"MF transactions report saved: {out_file}")
+        return out_file

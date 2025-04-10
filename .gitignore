@@ -2,4 +2,5 @@ venv
 web/__pycache__
 utils/__pycache__
 ui/__pycache__
+generator/__pycache__
 tests/

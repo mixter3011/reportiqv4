@@ -299,7 +299,7 @@ class Main(QMainWindow):
             padding: 3px 10px;
             border-radius: 5px;
         """)
-        proc_mf_btn.clicked.connect(self.process_hdng)
+        proc_mf_btn.clicked.connect(self.process_mf_trans)
         layout.addWidget(proc_mf_btn)
         
         
@@ -493,15 +493,8 @@ class Main(QMainWindow):
         )
     
     def process_hdng(self):
-        missing_files = [name for name, path in self.required_files.items() if path is None]
-        if missing_files:
-            QMessageBox.warning(self, "Missing Files", 
-                               f"Please upload the following required files: {', '.join(missing_files)}")
-            return
-        
-        default_path = self.dl_folder
-        folder = QFileDialog.getExistingDirectory(self, "Select holdings folder", default_path)
-        
+        folder = QFileDialog.getExistingDirectory(self, "Select holdings folder", self.dl_folder)
+    
         if not folder:
             QMessageBox.warning(self, "Error", "No folder selected.")
             return
@@ -510,12 +503,14 @@ class Main(QMainWindow):
 
         try:
             self.processor = Processor(folder)
-            self.processor.set_required_files(
-                ledger=self.required_files["Ledger"],
-                mf_transactions=self.required_files["MF Transactions"],
-                sip=self.required_files["SIP"]
-            )
-            
+        
+            if hasattr(self.processor, 'set_required_files') and "Ledger" in self.required_files and self.required_files["Ledger"] is not None:
+                self.processor.set_required_files(
+                    ledger=self.required_files["Ledger"],
+                    mf_transactions=None,
+                    sip=None
+                )
+        
             out_file = self.processor.run()
 
             if out_file:
@@ -533,6 +528,63 @@ class Main(QMainWindow):
             else:
                 self.sum_lbl.setText("No valid holdings files found.")
                 QMessageBox.warning(self, "Error", "No valid holdings files found.")
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Processing error: {error_details}")
+            err_msg = f"Error: {str(e)}"
+            self.log(err_msg)
+            QMessageBox.critical(self, "Critical Error", err_msg)
+    
+    def process_mf_trans(self):
+        missing_files = []
+    
+        if "MF Transactions" not in self.required_files or self.required_files["MF Transactions"] is None:
+            missing_files.append("MF Transactions")
+    
+        if "SIP" not in self.required_files or self.required_files["SIP"] is None:
+            missing_files.append("SIP")
+    
+        if missing_files:
+            QMessageBox.warning(self, "Missing Files", 
+                            f"Please upload the following required files: {', '.join(missing_files)}")
+            return
+    
+        folder = QFileDialog.getExistingDirectory(self, "Select MF transactions folder", self.dl_folder)
+    
+        if not folder:
+            QMessageBox.warning(self, "Error", "No folder selected.")
+            return
+
+        self.log(f"Processing MF transactions from: {folder}")
+
+        try:
+            self.processor = Processor(folder)
+        
+            if hasattr(self.processor, 'set_required_files'):
+                self.processor.set_required_files(
+                    ledger=self.required_files.get("Ledger"),
+                    mf_transactions=self.required_files["MF Transactions"],
+                    sip=self.required_files["SIP"]
+                )
+        
+            out_file = self.processor.run_mf_transactions()
+
+            if out_file:
+                df = pd.read_excel(out_file)
+                count = df.shape[0]
+
+                self.sum_lbl.setText(
+                    f"Processed MF transactions for {count} clients.\n"
+                    f"Report saved: {out_file}"
+                )
+                QMessageBox.information(self, "Success", 
+                    f"MF transactions processing completed!\n\n"
+                    f"Clients processed: {count}\n"
+                    f"Report saved: {out_file}")
+            else:
+                self.sum_lbl.setText("No valid MF transactions files found.")
+                QMessageBox.warning(self, "Error", "No valid MF transactions files found.")
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
