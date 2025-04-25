@@ -19,8 +19,8 @@ class FileDropZone(QFrame):
         self.setFrameShape(QFrame.Box)
         self.setFrameShadow(QFrame.Sunken)
         self.setStyleSheet("""
-            background-color: #f0f0f0;
-            border: 2px dashed #aaaaaa;
+            background-color: 
+            border: 2px dashed 
             border-radius: 5px;
             padding: 5px;
             min-height: 100px;
@@ -48,8 +48,8 @@ class FileDropZone(QFrame):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
             self.setStyleSheet("""
-                background-color: #e0f7fa;
-                border: 2px dashed #00acc1;
+                background-color: 
+                border: 2px dashed 
                 border-radius: 5px;
                 padding: 5px;
                 min-height: 100px;
@@ -57,8 +57,8 @@ class FileDropZone(QFrame):
     
     def dragLeaveEvent(self, event):
         self.setStyleSheet("""
-            background-color: #f0f0f0;
-            border: 2px dashed #aaaaaa;
+            background-color: 
+            border: 2px dashed 
             border-radius: 5px;
             padding: 5px;
             min-height: 100px;
@@ -70,8 +70,8 @@ class FileDropZone(QFrame):
             self.process_files(file_paths)
         
         self.setStyleSheet("""
-            background-color: #f0f0f0;
-            border: 2px dashed #aaaaaa;
+            background-color: 
+            border: 2px dashed 
             border-radius: 5px;
             padding: 5px;
             min-height: 100px;
@@ -107,7 +107,7 @@ class UploadedFilesDisplay(QFrame):
         self.setFrameShadow(QFrame.Sunken)
         self.setStyleSheet("""
             background-color: white;
-            border: 1px solid #cccccc;
+            border: 1px solid 
             border-radius: 5px;
             padding: 5px;
         """)
@@ -157,8 +157,8 @@ class Main(QMainWindow):
         self.file_path = None
         self.processor = None
         self.dl_folder = self._get_dl_path()
+        self.mf_folder = self._get_mf_path()
         
-        # File tracking
         self.required_files = {
             "Ledger": None,
             "MF Transactions": None,
@@ -174,6 +174,13 @@ class Main(QMainWindow):
             os.makedirs(path)
         return path
 
+    def _get_mf_path(self):
+        desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+        path = os.path.join(desktop, "MF Transactions")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        return path
+    
     def log(self, msg):
         print(msg)
         self.status_lbl.setText(msg)
@@ -182,7 +189,7 @@ class Main(QMainWindow):
         self.setWindowTitle("REPORT IQ")
         self.setGeometry(100, 100, 500, 600)
         self.setStyleSheet("""
-            background-color: #f8f9fa;
+            background-color: 
             font-family: Arial;
             font-size: 12px;
         """)
@@ -194,7 +201,7 @@ class Main(QMainWindow):
         title.setStyleSheet("""
             font-size: 20px;
             font-weight: bold;
-            color: #1e3a8a;
+            color: 
             padding: 10px;
         """)
         layout.addWidget(title)
@@ -224,7 +231,7 @@ class Main(QMainWindow):
 
         login_btn = QPushButton("LOGIN")
         login_btn.setStyleSheet("""
-            background-color: #2563eb;
+            background-color: 
             color: white;  
             font-weight: bold;
             padding: 3px 10px;
@@ -246,7 +253,7 @@ class Main(QMainWindow):
         upload_title.setStyleSheet("""
             font-size: 16px;
             font-weight: bold;
-            color: #1e3a8a;
+            color: 
             padding: 5px;
         """)
         upload_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -270,7 +277,7 @@ class Main(QMainWindow):
 
         self.excel_btn = QPushButton("LOAD CLIENT EXCEL FILE")
         self.excel_btn.setStyleSheet("""
-            background-color: #22c55e;
+            background-color: 
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -282,7 +289,7 @@ class Main(QMainWindow):
         
         proc_btn = QPushButton("PROCESS HOLDINGS")
         proc_btn.setStyleSheet("""
-            background-color: #f59e0b;
+            background-color: 
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -293,7 +300,7 @@ class Main(QMainWindow):
 
         proc_mf_btn = QPushButton("PROCESS MF TRANSACTIONS")
         proc_mf_btn.setStyleSheet("""
-            background-color: #f59e0b;
+            background-color: 
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -305,7 +312,7 @@ class Main(QMainWindow):
         
         generate_report_btn = QPushButton("GENERATE REPORT")
         generate_report_btn.setStyleSheet("""
-            background-color: #8b5cf6;
+            background-color: 
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -316,7 +323,7 @@ class Main(QMainWindow):
 
         generate_excel_btn = QPushButton("GENERATE EXCEL")
         generate_excel_btn.setStyleSheet("""
-            background-color: #ef4444;
+            background-color: 
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -423,7 +430,7 @@ class Main(QMainWindow):
             return
 
         try:
-            self.scraper = Scraper(self.dl_folder)
+            self.scraper = Scraper(self.dl_folder, self.mf_folder)
             if self.scraper.login(url, user, pwd):
                 self.status_lbl.setText("Login successful")
                 self.excel_btn.setEnabled(True)
@@ -438,9 +445,9 @@ class Main(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open Excel File", "", "Excel Files (*.xlsx *.xls);;All Files (*)")
         if not file_path:
             return
-            
-        self.file_path = file_path    
         
+        self.file_path = file_path    
+    
         try:
             try:
                 df = pd.read_excel(file_path)
@@ -449,20 +456,20 @@ class Main(QMainWindow):
                     df = pd.read_excel(file_path, engine='openpyxl')
                 except Exception as e2:
                     df = pd.read_excel(file_path, engine='xlrd')
-            
+        
             column_names = [col.lower().strip() for col in df.columns]
             client_code_variations = ['client code', 'clientcode', 'client_code', 'code', 'client id', 'clientid', 'client_id']
-            
+        
             code_column = None
             for variant in client_code_variations:
                 if variant in column_names:
                     code_column = df.columns[column_names.index(variant)]
                     break
-            
+        
             if code_column is None:
                 QMessageBox.warning(self, "Error", f"No client code column found. Available columns: {', '.join(df.columns)}")
                 return
-                
+            
             codes = df[code_column].dropna().astype(str).tolist()
 
             if not codes:
@@ -470,15 +477,61 @@ class Main(QMainWindow):
                 return
 
             QMessageBox.information(self, "Success", f"Loaded {len(codes)} client codes.")
-            
+
             if not self.scraper:
                 QMessageBox.warning(self, "Error", "Please login first before processing client codes.")
                 return
+        
+            choice = QMessageBox.question(
+                self, 
+                "Download Options", 
+                "What would you like to download?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes
+            )
+        
+            if choice == QMessageBox.StandardButton.Cancel:
+                return
+        
+            download_holdings = choice == QMessageBox.StandardButton.Yes
+            download_mf_trans = choice != QMessageBox.StandardButton.Cancel
+        
+            holdings_success = 0
+            holdings_fails = []
+            mf_success = 0
+            mf_fails = []
+        
+            
+            if download_holdings:
+                self.status_lbl.setText("Downloading holdings...")
+                holdings_success, holdings_fails = self.scraper.process_all_clients(codes, self.update_sum)
+            
+            
+            if download_mf_trans:
+                self.status_lbl.setText("Downloading MF transactions...")
+                mf_success, mf_fails = self.scraper.process_all_clients_mf_trans(codes, self.update_sum)
+        
+            
+            summary = []
+            if download_holdings:
+                summary.append(f"Downloaded holdings: {holdings_success}/{len(codes)} clients")
+                summary.append(f"Failed holdings: {len(holdings_fails)}")
+                if holdings_fails:
+                    summary.append(f"Failed holdings clients: {', '.join(holdings_fails[:5])}" + 
+                               ("..." if len(holdings_fails) > 5 else ""))
                 
-            success, fails = self.scraper.process_all_clients(codes, self.update_sum)
-            
-            QMessageBox.information(self, "Success", f"Extracted {success} of {len(codes)} holdings.")
-            
+            if download_mf_trans:
+                summary.append(f"Downloaded MF transactions: {mf_success}/{len(codes)} clients")
+                summary.append(f"Failed MF transactions: {len(mf_fails)}")
+                if mf_fails:
+                    summary.append(f"Failed MF transactions clients: {', '.join(mf_fails[:5])}" + 
+                               ("..." if len(mf_fails) > 5 else ""))
+        
+            self.sum_lbl.setText("\n".join(summary))
+        
+            QMessageBox.information(self, "Download Complete", 
+                f"Process completed with the following results:\n\n" + "\n".join(summary))
+        
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()

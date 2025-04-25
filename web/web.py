@@ -6,9 +6,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 class Scraper:
-    def __init__(self, dl_folder):
+    def __init__(self, dl_folder, mf_folder):
         self.driver = None
         self.dl_folder = dl_folder
+        self.mf_folder = mf_folder
         self.fail_list = []
         self.max_parallel = 3
         self.successful_downloads = 0
@@ -91,211 +92,376 @@ class Scraper:
     def search_client(self, code):
         self.log(f"🔎 Processing client: {code}")
         wait = WebDriverWait(self.driver, 15)  
+        retry_count = 0
+        max_retries = 2
 
-        initial_tabs = self.driver.window_handles
-        if len(initial_tabs) > 1:
-            self.driver.switch_to.window(initial_tabs[1])
-
-        try:
-            search_box = wait.until(EC.presence_of_element_located((By.ID, "UCBanner_txtSearch")))
-            search_box.clear()
-            search_box.send_keys(code)
-            self.log(f"⌨️ Entering client code: {code}")
-
-            suggestions = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "ui-menu-item")))
-            first_suggestion = self.driver.find_element(By.CLASS_NAME, "ui-menu-item")
-            first_suggestion.click()
-
-            time.sleep(3)
-            new_tabs = self.driver.window_handles
-            if len(new_tabs) > len(initial_tabs):
-                client_profile_tab = new_tabs[-1]
-                self.driver.switch_to.window(client_profile_tab)
-                self.log("🆕 Switched to the Client Profile tab.")
-
-                capital_gain_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(text(),'Capital Gain Report')]")))
-                capital_gain_btn.click()
-
-                time.sleep(3)
-                dashboard_tabs = self.driver.window_handles
-                if len(dashboard_tabs) > len(new_tabs):
-                    client_dashboard_tab = dashboard_tabs[-1]
-                    self.driver.switch_to.window(client_dashboard_tab)
-                    self.log("📊 Switched to the Client Dashboard tab.")
-
-                    self.driver.switch_to.window(client_profile_tab)
-                    self.driver.close()
-                    self.log("❌ Closed Client Profile tab.")
-
-                    self.driver.switch_to.window(client_dashboard_tab)
-
-                    result = self.dl_holdings(code)
-
-                    self.driver.close()
+        while retry_count <= max_retries:
+            try:
+                
+                initial_tabs = self.driver.window_handles
+                if len(initial_tabs) > 1:
                     self.driver.switch_to.window(initial_tabs[1])
-                    self.log("🔄 Closed client tab and returned to search tab.")
-                    return result
+            
+                
+                search_box = wait.until(EC.presence_of_element_located((By.ID, "UCBanner_txtSearch")))
+                search_box.clear()
+                search_box.send_keys(code)
+                self.log(f"⌨️ Entering client code: {code}")
+            
+                
+                time.sleep(2)
+            
+                
+                try:
+                    suggestions = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "ui-menu-item")))
+                    first_suggestion = self.driver.find_element(By.CLASS_NAME, "ui-menu-item")
+                    first_suggestion.click()
+                except Exception as e:
+                    self.log(f"⚠️ No suggestions found for {code}, retrying...")
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
 
-            self.log(f"🚨 No new Client Dashboard tab opened for {code}")
-            return False
+                
+                time.sleep(5)
+                new_tabs = self.driver.window_handles
+            
+                if len(new_tabs) > len(initial_tabs):
+                    client_profile_tab = new_tabs[-1]
+                    self.driver.switch_to.window(client_profile_tab)
+                    self.log("🆕 Switched to the Client Profile tab.")
 
-        except Exception as e:
-            self.log(f"❌ Error processing {code}: {str(e)}")
-            return False
+                    
+                    try:
+                        capital_gain_btn = wait.until(EC.element_to_be_clickable(
+                            (By.XPATH, "//a[contains(text(),'Capital Gain Report')]")))
+                        capital_gain_btn.click()
+                    except Exception as e:
+                        self.log(f"⚠️ Could not find Capital Gain Report button: {str(e)}")
+                        
+                        self.driver.close()
+                        self.driver.switch_to.window(initial_tabs[1])
+                        retry_count += 1
+                        if retry_count > max_retries:
+                            return False
+                        continue
+
+                    
+                    time.sleep(5)
+                    dashboard_tabs = self.driver.window_handles
+                
+                    if len(dashboard_tabs) > len(new_tabs):
+                        client_dashboard_tab = dashboard_tabs[-1]
+                        self.driver.switch_to.window(client_dashboard_tab)
+                        self.log("📊 Switched to the Client Dashboard tab.")
+
+                        
+                        self.driver.switch_to.window(client_profile_tab)
+                        self.driver.close()
+                        self.log("❌ Closed Client Profile tab.")
+
+                        
+                        self.driver.switch_to.window(client_dashboard_tab)
+
+                        
+                        result = self.dl_holdings(code)
+
+                        
+                        self.driver.close()
+                        self.driver.switch_to.window(initial_tabs[1])
+                        self.log("🔄 Closed client tab and returned to search tab.")
+                        return result
+                    else:
+                        self.log(f"🚨 No Client Dashboard tab opened for {code}")
+                        
+                        self.driver.close()
+                        self.driver.switch_to.window(initial_tabs[1])
+                        retry_count += 1
+                        if retry_count > max_retries:
+                            return False
+                        continue
+                else:
+                    self.log(f"🚨 No Client Profile tab opened for {code}")
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
+                
+            except Exception as e:
+                self.log(f"❌ Error processing {code}: {str(e)}")
+                
+                try:
+                    current_tabs = self.driver.window_handles
+                    if len(current_tabs) > 1:
+                        self.driver.switch_to.window(current_tabs[1])
+                except:
+                    pass
+            
+                retry_count += 1
+                if retry_count > max_retries:
+                    return False
+                time.sleep(2)
+            
+        return False
 
     def dl_holdings(self, code):
         try:
             self.log(f"📊 Navigating to Holdings for {code}")
-            wait = WebDriverWait(self.driver, 10)
+            wait = WebDriverWait(self.driver, 15)
 
-            holding_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(),'Holding')]")))
-            holding_menu.click()
-
-            time.sleep(2)  
-            as_on_date_holding = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "As on date holding")))
-            as_on_date_holding.click()
-
-            time.sleep(3)  
-
-            self.log("💾 Downloading Holdings")
-            excel_button = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_imgExcel")))
-            excel_button.click()
-
-            time.sleep(4)
+            try:
+                holding_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(),'Holding')]")))
+                holding_menu.click()
+                time.sleep(3)
             
-            downloaded_files = sorted(
-                [f for f in os.listdir(self.dl_folder) if f.endswith(".xls") or f.endswith(".xlsx")],
-                key=lambda x: os.path.getmtime(os.path.join(self.dl_folder, x)),
-                reverse=True
-            )
+                as_on_date_holding = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "As on date holding")))
+                as_on_date_holding.click()
+                time.sleep(3)
+            except Exception as e:
+                self.log(f"⚠️ Error navigating to Holdings menu: {str(e)}")
+                return False
 
-            if downloaded_files:
-                latest_file = os.path.join(self.dl_folder, downloaded_files[0])
-                new_file_name = os.path.join(self.dl_folder, f"{code}.xlsx")
-                os.rename(latest_file, new_file_name)
-                self.log(f"✅ Holdings saved as: {new_file_name}")
-                return True
+            try:
+                self.log("💾 Downloading Holdings")
+                excel_button = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_imgExcel")))
+                excel_button.click()
+                time.sleep(5)  
+            except Exception as e:
+                self.log(f"⚠️ Error clicking Excel button: {str(e)}")
+                return False
+        
+            
+            try:
+                downloaded_files = sorted(
+                    [f for f in os.listdir(self.dl_folder) if f.endswith(".xls") or f.endswith(".xlsx")],
+                    key=lambda x: os.path.getmtime(os.path.join(self.dl_folder, x)),
+                    reverse=True
+                )
+
+                if downloaded_files:
+                    latest_file = os.path.join(self.dl_folder, downloaded_files[0])
+                    new_file_name = os.path.join(self.dl_folder, f"{code}.xlsx")
                 
-            else:
-                self.log(f"⚠️ No file found for {code}")
+                    
+                    retry = 0
+                    while retry < 3:
+                        try:
+                            os.rename(latest_file, new_file_name)
+                            self.log(f"✅ Holdings saved as: {new_file_name}")
+                            return True
+                        except Exception as e:
+                            self.log(f"⚠️ Error renaming file (attempt {retry+1}/3): {str(e)}")
+                            time.sleep(2)
+                            retry += 1
+                
+                    return False
+                else:
+                    self.log(f"⚠️ No file found for {code}")
+                    return False
+            except Exception as e:
+                self.log(f"❌ Error processing downloaded file: {str(e)}")
                 return False
 
         except Exception as e:
-            self.log(f"❌ Error processing {code}: {e}")
+            self.log(f"❌ Error processing holdings for {code}: {str(e)}")
             return False
     
     def dl_mf_transactions(self, code):
         try:
             self.log(f"📊 Navigating to MF transactions for {code}")
-            wait = WebDriverWait(self.driver, 10)
-            reports_menu = wait.until(EC.element_to_be_clickable((
-                By.XPATH, "//span[contains(text(),'Reports')]")))
-            reports_menu.click()
-
-            time.sleep(2)
-            mf_trans = wait.until(EC.element_to_be_clickable((
-                By.LINK_TEXT, "MF Transaction Report")))
-            mf_trans.click()
-
-            time.sleep(3)
+            wait = WebDriverWait(self.driver, 15)
+    
             try:
-                from_date = wait.until(EC.presence_of_element_located((By.ID, "MainContent_txtFromDate")))
-                to_date = wait.until(EC.presence_of_element_located((By.ID, "MainContent_txtToDate")))
-            except:
-                self.log("Date range fields not found or not needed")
-
-            try:
-                generate_btn = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_btnGenerateReport")))
-                generate_btn.click()
-                time.sleep(3)  
-            except:
-                self.log("Generate report button not found or not needed")
-
-            self.log("💾 Downloading MF transactions")
-            excel_btn = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_imgExcel")))
-            excel_btn.click()
-
-            time.sleep(4)
+                transactions_menu = wait.until(EC.element_to_be_clickable((
+                    By.XPATH, "//span[contains(text(),'Transaction')]")))
+                transactions_menu.click()
+                time.sleep(3)
         
-            files = sorted(
-                [f for f in os.listdir(self.dl_folder) 
-                    if f.endswith(".xls") or f.endswith(".xlsx")],
-                key=lambda x: os.path.getmtime(os.path.join(self.dl_folder, x)),
-                reverse=True
-            )
+                mf_section = wait.until(EC.element_to_be_clickable((
+                    By.LINK_TEXT, "Mutual Fund")))
+                mf_section.click()
+                time.sleep(3)
+            except Exception as e:
+                self.log(f"⚠️ Error navigating to MF transactions menu: {str(e)}")
+                return False
 
-            if files:
-                latest = os.path.join(self.dl_folder, files[0])
-                new_name = os.path.join(self.dl_folder, f"{code}_MFTrans.xlsx")
-                os.rename(latest, new_name)
-                self.log(f"✅ MF transactions saved as: {new_name}")
-                return True
+            try:
+                self.log("💾 Downloading MF transactions")
             
-            else:
-                self.log(f"⚠️ No file found for {code} MF transactions")
+                try:
+                    excel_button = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_imgExcel")))
+                    excel_button.click()
+                except:
+                    try:
+                        excel_button = wait.until(EC.element_to_be_clickable((
+                            By.XPATH, "//img[contains(@id, 'Excel')]")))
+                        excel_button.click()
+                    except:
+                        try:
+                            excel_button = wait.until(EC.element_to_be_clickable((
+                                By.XPATH, "//*[contains(@title, 'Excel') or contains(@alt, 'Excel')]")))
+                            excel_button.click()
+                        except Exception as e:
+                            self.log(f"⚠️ Could not find Excel button using multiple methods: {str(e)}")
+                            return False
+            
+                time.sleep(5)  
+            except Exception as e:
+                self.log(f"⚠️ Error clicking Excel button: {str(e)}")
+                return False
+    
+            try:
+                downloaded_files = sorted(
+                    [f for f in os.listdir(self.dl_folder) if f.endswith(".xls") or f.endswith(".xlsx")],
+                    key=lambda x: os.path.getmtime(os.path.join(self.dl_folder, x)),
+                    reverse=True
+                )
+
+                if downloaded_files:
+                    latest_file = os.path.join(self.dl_folder, downloaded_files[0])
+                    new_file_name = os.path.join(self.mf_folder, f"{code}_MFTrans.xlsx")
+                
+                    os.makedirs(os.path.dirname(new_file_name), exist_ok=True)
+                
+                    retry = 0
+                    while retry < 3:
+                        try:
+                            os.rename(latest_file, new_file_name)
+                            self.log(f"✅ MF transactions saved as: {new_file_name}")
+                            return True
+                        except Exception as e:
+                            self.log(f"⚠️ Error renaming file (attempt {retry+1}/3): {str(e)}")
+                            time.sleep(2)
+                            retry += 1
+            
+                    return False
+                else:
+                    self.log(f"⚠️ No file found for {code} MF transactions")
+                    return False
+            except Exception as e:
+                self.log(f"❌ Error processing downloaded file: {str(e)}")
                 return False
 
         except Exception as e:
-            self.log(f"❌ Error downloading MF transactions for {code}: {e}")
+            self.log(f"❌ Error downloading MF transactions for {code}: {str(e)}")
             return False
         
     def search_client_mf_trans(self, code):
         self.log(f"🔎 Processing client MF transactions: {code}")
         wait = WebDriverWait(self.driver, 15)
-
-        init_tabs = self.driver.window_handles
-        if len(init_tabs) > 1:
-            self.driver.switch_to.window(init_tabs[1])
-
-        try:
-            search = wait.until(EC.presence_of_element_located((By.ID, "UCBanner_txtSearch")))
-            search.clear()
-            search.send_keys(code)
-            self.log(f"⌨️ Entering client code: {code}")
-
-            sugg = self.driver.find_element(By.CLASS_NAME, "ui-menu-item")
-            sugg.click()
-
-            time.sleep(3)
-            new_tabs = self.driver.window_handles
-        
-            if len(new_tabs) > len(init_tabs):
-                prof_tab = new_tabs[-1]
-                self.driver.switch_to.window(prof_tab)
-                self.log("🆕 Switched to the client profile tab.")
-
-                reports_btn = wait.until(EC.element_to_be_clickable((
-                    By.XPATH, "//a[contains(text(),'Reports')]")))
-                reports_btn.click()
-
-                time.sleep(3)
-                dash_tabs = self.driver.window_handles
+        retry_count = 0
+        max_retries = 2
+    
+        while retry_count <= max_retries:
+            try:
+                
+                initial_tabs = self.driver.window_handles
+                if len(initial_tabs) > 1:
+                    self.driver.switch_to.window(initial_tabs[1])
             
-                if len(dash_tabs) > len(new_tabs):
-                    dash_tab = dash_tabs[-1]
-                    self.driver.switch_to.window(dash_tab)
-                    self.log("📊 Switched to the client reports tab.")
-
-                    self.driver.switch_to.window(prof_tab)
-                    self.driver.close()
-                    self.log("❌ Closed client profile tab.")
-
-                    self.driver.switch_to.window(dash_tab)
                 
-                    result = self.dl_mf_transactions(code)
+                search_box = wait.until(EC.presence_of_element_located((By.ID, "UCBanner_txtSearch")))
+                search_box.clear()
+                search_box.send_keys(code)
+                self.log(f"⌨️ Entering client code: {code}")
+            
                 
-                    self.driver.close()
-                    self.driver.switch_to.window(init_tabs[1])
-                    self.log("🔄 Closed client tab and returned to search tab.")
+                time.sleep(2)
+            
                 
-                    return result
-
-            self.log(f"🚨 No new client dashboard tab opened for {code}")
-            return False
-
-        except Exception as e:
-            self.log(f"❌ Error processing MF transactions for {code}: {str(e)}")
-            return False
+                try:
+                    suggestions = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "ui-menu-item")))
+                    first_suggestion = self.driver.find_element(By.CLASS_NAME, "ui-menu-item")
+                    first_suggestion.click()
+                except Exception as e:
+                    self.log(f"⚠️ No suggestions found for {code}, retrying...")
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
+                
+                
+                time.sleep(5)
+                new_tabs = self.driver.window_handles
+            
+                if len(new_tabs) > len(initial_tabs):
+                    client_profile_tab = new_tabs[-1]
+                    self.driver.switch_to.window(client_profile_tab)
+                    self.log("🆕 Switched to the Client Profile tab.")
+                
+                    
+                    try:
+                        capital_gain_btn = wait.until(EC.element_to_be_clickable(
+                            (By.XPATH, "//a[contains(text(),'Capital Gain Report')]")))
+                        capital_gain_btn.click()
+                    except Exception as e:
+                        self.log(f"⚠️ Could not find Capital Gain Report button: {str(e)}")
+                        
+                        self.driver.close()
+                        self.driver.switch_to.window(initial_tabs[1])
+                        retry_count += 1
+                        if retry_count > max_retries:
+                            return False
+                        continue
+                
+                    
+                    time.sleep(5)
+                    dashboard_tabs = self.driver.window_handles
+                
+                    if len(dashboard_tabs) > len(new_tabs):
+                        client_dashboard_tab = dashboard_tabs[-1]
+                        self.driver.switch_to.window(client_dashboard_tab)
+                        self.log("📊 Switched to the Client Dashboard tab.")
+                    
+                        
+                        self.driver.switch_to.window(client_profile_tab)
+                        self.driver.close()
+                        self.log("❌ Closed Client Profile tab.")
+                    
+                        
+                        self.driver.switch_to.window(client_dashboard_tab)
+                    
+                        
+                        result = self.dl_mf_transactions(code)
+                    
+                        
+                        self.driver.close()
+                        self.driver.switch_to.window(initial_tabs[1])
+                        self.log("🔄 Closed client tab and returned to search tab.")
+                        return result
+                    else:
+                        self.log(f"🚨 No Client Dashboard tab opened for {code}")
+                        
+                        self.driver.close()
+                        self.driver.switch_to.window(initial_tabs[1])
+                        retry_count += 1
+                        if retry_count > max_retries:
+                            return False
+                        continue
+                else:
+                    self.log(f"🚨 No Client Profile tab opened for {code}")
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
+                
+            except Exception as e:
+                self.log(f"❌ Error processing MF transactions for {code}: {str(e)}")
+                
+                try:
+                    current_tabs = self.driver.window_handles
+                    if len(current_tabs) > 1:
+                        self.driver.switch_to.window(current_tabs[1])
+                except:
+                    pass
+            
+                retry_count += 1
+                if retry_count > max_retries:
+                    return False
+                time.sleep(2)
+            
+        return False
 
     def process_all_clients_mf_trans(self, codes, update_cb=None):
         success = 0
