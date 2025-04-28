@@ -1,4 +1,6 @@
 import os
+import glob
+import time
 import pandas as pd
 from generator.excel import excel_generator
 from web.web import Scraper
@@ -546,15 +548,51 @@ class Main(QMainWindow):
         )
     
     def process_hdng(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select holdings folder", self.dl_folder)
-    
-        if not folder:
-            QMessageBox.warning(self, "Error", "No folder selected.")
-            return
-
+        folder = self.dl_folder  
         self.log(f"Processing holdings from: {folder}")
 
         try:
+            excel_files = [os.path.join(folder, f) for f in os.listdir(folder) 
+                          if f.endswith(('.xlsx', '.xls'))]
+        
+            if not excel_files:
+                self.sum_lbl.setText("No Excel files found in Holdings folder.")
+                QMessageBox.warning(self, "Error", "No Excel files found in Holdings folder.")
+                return
+            
+        
+            converted_count = 0
+            for excel_file in excel_files:
+                try:
+                
+                    try:
+                        df = pd.read_excel(excel_file)
+                    except Exception as e1:
+                        try:
+                            df = pd.read_excel(excel_file, engine='openpyxl')
+                        except Exception as e2:
+                            df = pd.read_excel(excel_file, engine='xlrd')
+                
+                
+                    csv_file = os.path.splitext(excel_file)[0] + '.csv'
+                
+                
+                    df.to_csv(csv_file, index=False)
+                    converted_count += 1
+                
+                except Exception as e:
+                    print(f"Error converting {excel_file}: {str(e)}")
+        
+            self.sum_lbl.setText(
+                f"Converted {converted_count}/{len(excel_files)} Excel files to CSV in {folder}"
+            )
+        
+            QMessageBox.information(self, "Success", 
+                f"Holdings conversion completed!\n\n"
+                f"Files converted to CSV: {converted_count}/{len(excel_files)}\n"
+                f"Location: {folder}")
+        
+        
             self.processor = Processor(folder)
         
             if hasattr(self.processor, 'set_required_files') and "Ledger" in self.required_files and self.required_files["Ledger"] is not None:
@@ -564,23 +602,18 @@ class Main(QMainWindow):
                     sip=None
                 )
         
-            out_file = self.processor.run()
+            out_file = self.processor.process_holdings()
 
             if out_file:
                 df = pd.read_excel(out_file)
                 count = df.shape[0]
 
                 self.sum_lbl.setText(
+                    f"Converted {converted_count} files to CSV.\n"
                     f"Extracted holdings for {count} clients.\n"
                     f"Report saved: {out_file}"
                 )
-                QMessageBox.information(self, "Success", 
-                    f"Holdings processing completed!\n\n"
-                    f"Clients processed: {count}\n"
-                    f"Report saved: {out_file}")
-            else:
-                self.sum_lbl.setText("No valid holdings files found.")
-                QMessageBox.warning(self, "Error", "No valid holdings files found.")
+        
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
@@ -668,30 +701,85 @@ class Main(QMainWindow):
 
     def generate_excel(self):
         try:
-            self.log("Generating Excel file...")
-    
-            if not hasattr(self, 'processor') or not self.processor:
-                QMessageBox.warning(self, "Error", "Please process holdings first.")
+            self.log("Generating Excel files from CSV files...")
+            folder = self.dl_folder  
+            desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+            excel_reports_folder = os.path.join(desktop, "excel_reports")
+            if not os.path.exists(excel_reports_folder):
+                os.makedirs(excel_reports_folder)
+        
+            csv_files = [os.path.join(folder, f) for f in os.listdir(folder) 
+                        if f.endswith('.csv')]
+        
+            if not csv_files:
+                self.log("No CSV files found in Holdings folder.")
+                QMessageBox.warning(self, "Error", "No CSV files found in Holdings folder.")
                 return
         
-            excel_path = QFileDialog.getSaveFileName(self, "Save Excel As", "", "Excel Files (*.xlsx);;All Files (*)")[0]
-            if not excel_path:
-                return
+            processed_count = 0
+            for csv_file in csv_files:
+                try:
+                    df = pd.read_csv(csv_file)
+                    if df.empty:
+                        print(f"Skipping empty file: {csv_file}")
+                        continue
+                
+                    base_filename = os.path.splitext(os.path.basename(csv_file))[0]
+                    
+                    output_file = excel_generator(df)
+                
+                    if output_file:
+                        if os.path.exists(output_file):
+                            dest_file = os.path.join(excel_reports_folder, f"{base_filename}_report.xlsx")
+                            import shutil
+                            shutil.copy2(output_file, dest_file)
+                            processed_count += 1
+                            print(f"Processed: {csv_file} → {dest_file}")
+                        else:
+                            print(f"Output file not found: {output_file}")
+                    else:
+                        try:
+                            potential_dirs = [os.getcwd(), os.path.dirname(csv_file), desktop]
+                            newest_file = None
+                            newest_time = 0
+                            for check_dir in potential_dirs:
+                                excel_files = glob.glob(os.path.join(check_dir, "*.xlsx"))
+                                for file in excel_files:
+                                    file_time = os.path.getmtime(file)
+                                
+                                    if time.time() - file_time < 10 and file_time > newest_time:  
+                                        newest_file = file
+                                        newest_time = file_time
+                        
+                            if newest_file:
+                                dest_file = os.path.join(excel_reports_folder, f"{base_filename}_report.xlsx")
+                                import shutil
+                                shutil.copy2(newest_file, dest_file)
+                                processed_count += 1
+                                print(f"Processed: {csv_file} → {dest_file} (found recent file)")
+                            else:
+                                print(f"Could not locate output file for {csv_file}")
+                        except Exception as inner_e:
+                            print(f"Error locating output for {csv_file}: {str(inner_e)}")
+                    
+                except Exception as e:
+                    print(f"Error processing {csv_file}: {str(e)}")
         
-            result = excel_generator()
-        
-            if result:
-                self.log(f"Excel file generated and saved to: {excel_path}")
-                QMessageBox.information(self, "Success", f"Excel file successfully generated and saved to:\n{excel_path}")
+            if processed_count > 0:
+                self.log(f"Generated {processed_count}/{len(csv_files)} Excel reports in {excel_reports_folder}")
+                QMessageBox.information(self, "Success", 
+                    f"Excel reports successfully generated!\n\n"
+                    f"Files processed: {processed_count}/{len(csv_files)}\n"
+                    f"Reports location: {excel_reports_folder}")
             else:
-                self.log("Failed to generate Excel file")
-                QMessageBox.warning(self, "Error", "Failed to generate Excel file")
-            
+                self.log("Failed to generate any Excel reports")
+                QMessageBox.warning(self, "Error", "Failed to generate any Excel reports")
+        
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
             print(f"Excel generation error: {error_details}")
-            QMessageBox.critical(self, "Error", f"Failed to generate Excel file: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to generate Excel files: {str(e)}")
      
     def closeEvent(self, event):
         if self.scraper:

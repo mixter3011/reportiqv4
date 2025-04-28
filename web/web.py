@@ -214,7 +214,7 @@ class Scraper:
                 holding_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(),'Holding')]")))
                 holding_menu.click()
                 time.sleep(3)
-            
+        
                 as_on_date_holding = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "As on date holding")))
                 as_on_date_holding.click()
                 time.sleep(3)
@@ -230,8 +230,7 @@ class Scraper:
             except Exception as e:
                 self.log(f"⚠️ Error clicking Excel button: {str(e)}")
                 return False
-        
-            
+    
             try:
                 downloaded_files = sorted(
                     [f for f in os.listdir(self.dl_folder) if f.endswith(".xls") or f.endswith(".xlsx")],
@@ -243,7 +242,8 @@ class Scraper:
                     latest_file = os.path.join(self.dl_folder, downloaded_files[0])
                     new_file_name = os.path.join(self.dl_folder, f"{code}.xlsx")
                 
-                    
+                    os.makedirs(os.path.dirname(new_file_name), exist_ok=True)
+                
                     retry = 0
                     while retry < 3:
                         try:
@@ -290,7 +290,7 @@ class Scraper:
                 self.log("💾 Downloading MF transactions")
             
                 try:
-                    excel_button = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_imgExcel")))
+                    excel_button = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_ctl02_imgExcel")))
                     excel_button.click()
                 except:
                     try:
