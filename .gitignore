@@ -1,4 +1,6 @@
-ui/__pycache__
+venv
+web/__pycache__
 utils/__pycache__
-__pycache__
-.venv
+ui/__pycache__
+generator/__pycache__
+tests/
