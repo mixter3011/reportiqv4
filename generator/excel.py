@@ -43,6 +43,8 @@ def excel_generator(df):
     ws.merge_cells('A1:J1')
     ws.merge_cells('A2:J2')
 
+    market_value_cells = {}
+
     ws.cell(row=1, column=1, value=client_name)
     ws.cell(row=1, column=1).fill = light_blue_fill
     ws.cell(row=1, column=1).font = Font(bold=True)
@@ -58,11 +60,58 @@ def excel_generator(df):
     equity_cols_to_keep = [0, 1, 2, 4, 5, 10]  
     equity_rename = {2: "Buy Price", 10: "P&L"}
 
+    
+    direct_equity_total = ['Total:']
+    
+    direct_equity_total.extend([''] * 3)
+
+    
+    market_value_col = equity_cols_to_keep[4]  
+    market_values = pd.to_numeric(direct_equity[f'Unnamed: {market_value_col}'], errors='coerce')
+    direct_equity_market_value = market_values.sum() if not market_values.isna().all() else 0
+    direct_equity_total.append(direct_equity_market_value)
+
+    
+    pnl_col = equity_cols_to_keep[5]  
+    pnl_values = pd.to_numeric(direct_equity[f'Unnamed: {pnl_col}'], errors='coerce')
+    direct_equity_pnl = pnl_values.sum() if not pnl_values.isna().all() else 0
+    direct_equity_total.append(direct_equity_pnl)
+
     etf_equity = equity_data[equity_data['Unnamed: 0'].str.contains('ETF', na=False)]
     etf_equity = etf_equity[~etf_equity['Unnamed: 0'].str.contains('Nifty 1D Rate Liquid BeES', na=False)]
     etf_equity = etf_equity[~etf_equity['Unnamed: 0'].str.contains('Nippon India ETF Nifty 8-13 yr G-Sec LongTerm Gilt', na=False)]
 
+    
+    etf_equity_total = ['Total:']
+    
+    etf_equity_total.extend([''] * 3)
+
+    
+    market_values = pd.to_numeric(etf_equity[f'Unnamed: {market_value_col}'], errors='coerce')
+    etf_equity_market_value = market_values.sum() if not market_values.isna().all() else 0
+    etf_equity_total.append(etf_equity_market_value)
+
+    
+    pnl_values = pd.to_numeric(etf_equity[f'Unnamed: {pnl_col}'], errors='coerce')
+    etf_equity_pnl = pnl_values.sum() if not pnl_values.isna().all() else 0
+    etf_equity_total.append(etf_equity_pnl)
+
     debt_etf = equity_data[equity_data['Unnamed: 0'].str.contains('Nifty 1D Rate Liquid BeES', na=False)]
+
+    
+    debt_etf_total = ['Total:']
+    
+    debt_etf_total.extend([''] * 3)
+
+    
+    market_values = pd.to_numeric(debt_etf[f'Unnamed: {market_value_col}'], errors='coerce')
+    debt_etf_market_value = market_values.sum() if not market_values.isna().all() else 0
+    debt_etf_total.append(debt_etf_market_value)
+
+    
+    pnl_values = pd.to_numeric(debt_etf[f'Unnamed: {pnl_col}'], errors='coerce')
+    debt_etf_pnl = pnl_values.sum() if not pnl_values.isna().all() else 0
+    debt_etf_total.append(debt_etf_pnl)
 
     gilt_etf = equity_data[equity_data['Unnamed: 0'].str.contains('Nippon India ETF Nifty 8-13 yr G-Sec LongTerm Gilt', na=False)]
 
@@ -70,6 +119,23 @@ def excel_generator(df):
     mf_rename = {3: "Buy Price", 12: "P&L"}
 
     equity_mf = mf_data[mf_data['Unnamed: 0'] == 'Equity']
+
+    
+    equity_mf_total = ['Total:']
+    
+    equity_mf_total.extend([''] * 3)
+
+    
+    mf_market_value_col = mf_cols_to_keep[4]  
+    market_values = pd.to_numeric(equity_mf[f'Unnamed: {mf_market_value_col}'], errors='coerce')
+    equity_mf_market_value = market_values.sum() if not market_values.isna().all() else 0
+    equity_mf_total.append(equity_mf_market_value)
+
+    
+    mf_pnl_col = mf_cols_to_keep[5]  
+    pnl_values = pd.to_numeric(equity_mf[f'Unnamed: {mf_pnl_col}'], errors='coerce')
+    equity_mf_pnl = pnl_values.sum() if not pnl_values.isna().all() else 0
+    equity_mf_total.append(equity_mf_pnl)
 
     debt_mf = mf_data[mf_data['Unnamed: 0'] == 'Debt']
 
@@ -91,8 +157,49 @@ def excel_generator(df):
     
         debt_mf = pd.concat([debt_mf, gilt_for_debt], ignore_index=True)
 
+    
+    debt_mf_total = ['Total:']
+    
+    debt_mf_total.extend([''] * 3)
+
+    
+    market_values = pd.to_numeric(debt_mf[f'Unnamed: {mf_market_value_col}'], errors='coerce')
+    debt_mf_market_value = market_values.sum() if not market_values.isna().all() else 0
+    debt_mf_total.append(debt_mf_market_value)
+
+    
+    pnl_values = pd.to_numeric(debt_mf[f'Unnamed: {mf_pnl_col}'], errors='coerce')
+    debt_mf_pnl = pnl_values.sum() if not pnl_values.isna().all() else 0
+    debt_mf_total.append(debt_mf_pnl)
+
     bond_cols_to_keep = [0, 1, 2, 4, 5, 10]  
     bond_rename = {2: "Buy Price", 10: "P&L"}
+
+    
+    bond_total = ['Total:']
+    
+    bond_total.extend([''] * 3)
+
+    
+    bond_market_value_col = bond_cols_to_keep[4]  
+    market_values = pd.to_numeric(bond_data[f'Unnamed: {bond_market_value_col}'], errors='coerce')
+    bond_market_value = market_values.sum() if not market_values.isna().all() else 0
+    bond_total.append(bond_market_value)
+
+    
+    bond_pnl_col = bond_cols_to_keep[5]  
+    pnl_values = pd.to_numeric(bond_data[f'Unnamed: {bond_pnl_col}'], errors='coerce')
+    bond_pnl = pnl_values.sum() if not pnl_values.isna().all() else 0
+    bond_total.append(bond_pnl)
+
+    total_portfolio_value = (
+        direct_equity_market_value + 
+        etf_equity_market_value + 
+        debt_etf_market_value + 
+        equity_mf_market_value + 
+        debt_mf_market_value + 
+        bond_market_value
+    )
 
     header_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
     total_fill = PatternFill(start_color="E6E6E6", end_color="E6E6E6", fill_type="solid")
@@ -103,11 +210,14 @@ def excel_generator(df):
     row = 5
     ws.cell(row=row, column=1, value="EQUITY").font = Font(bold=True)
 
-    row_portfolio = row - 1
+    row_portfolio = row - 1  
+    ws.merge_cells(f'A{row_portfolio}')
     ws.cell(row=row_portfolio, column=1, value="Portfolio Value").font = Font(bold=True)
     ws.cell(row=row_portfolio, column=1).border = thin_border
     ws.cell(row=row_portfolio, column=1).alignment = Alignment(horizontal="left")
-    
+
+    ws.merge_cells(f'B{row_portfolio}')
+    ws.cell(row=row_portfolio, column=2, value=format_num(total_portfolio_value))
     ws.cell(row=row_portfolio, column=2).border = thin_border
     ws.cell(row=row_portfolio, column=2).alignment = Alignment(horizontal="center")
     ws.cell(row=row_portfolio, column=2).font = Font(bold=True)
@@ -141,7 +251,6 @@ def excel_generator(df):
     ws.column_dimensions[get_column_letter(alloc_col)].width = 12
 
     row += 1
-    direct_equity_start_row = row
 
     for _, data_row in direct_equity.iterrows():
         for old_idx in equity_cols_to_keep:
@@ -154,29 +263,79 @@ def excel_generator(df):
                 ws.cell(row=row, column=new_idx).border = thin_border
         row += 1
 
-    direct_equity_total_row = row
-    ws.cell(row=row, column=1, value="Total:").font = Font(bold=True)
-    ws.cell(row=row, column=1).border = thin_border
-    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1).fill = total_fill
-    
-    for col_idx, old_idx in enumerate(equity_cols_to_keep[1:], 1):
-        new_idx = equity_col_map[old_idx]
-        col_letter = get_column_letter(new_idx)
-        ws.cell(row=row, column=new_idx, value=f"=SUM({col_letter}{direct_equity_start_row}:{col_letter}{row-1})")
-        ws.cell(row=row, column=new_idx).border = thin_border
-        ws.cell(row=row, column=new_idx).alignment = Alignment(horizontal="center")
-        ws.cell(row=row, column=new_idx).fill = total_fill
+    for idx, value in enumerate(direct_equity_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1).border = thin_border
+            ws.cell(row=row, column=idx + 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1).font = Font(bold=True)
 
-    col_letter = get_column_letter(5)  
-    ws.cell(row=row, column=alloc_col, value=f"={col_letter}{row}/$B${row_portfolio}*100")
+    if total_portfolio_value > 0:
+        direct_equity_percent = (direct_equity_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=alloc_col, value=f"{format_num(direct_equity_percent)}%")
+        ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=alloc_col).border = thin_border
+        ws.cell(row=row, column=alloc_col).fill = total_fill
+
+    for idx, value in enumerate(direct_equity_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1).border = thin_border
+            ws.cell(row=row, column=idx + 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1).font = Font(bold=True)
+
+    if total_portfolio_value > 0:
+        direct_equity_percent = (direct_equity_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=alloc_col, value=f"{format_num(direct_equity_percent)}%")
+        ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=alloc_col).border = thin_border
+        ws.cell(row=row, column=alloc_col).fill = total_fill
+
+    
+    row += 1
+    ws.cell(row=row, column=1, value="Dynamic Total:")
+    ws.cell(row=row, column=1).font = Font(bold=True)
+    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=1).border = thin_border
+    ws.cell(row=row, column=1).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")  
+
+    
+    for col_idx in [2, 3, 4]:
+        ws.cell(row=row, column=col_idx).border = thin_border
+        ws.cell(row=row, column=col_idx).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    market_value_col_letter = get_column_letter(5)
+    first_data_row = row - len(direct_equity) - 1  
+    last_data_row = row - 2  
+    ws.cell(row=row, column=5, value=f"=SUM({market_value_col_letter}{first_data_row}:{market_value_col_letter}{last_data_row})")
+    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=5).border = thin_border
+    ws.cell(row=row, column=5).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    pnl_col_letter = get_column_letter(6)
+    ws.cell(row=row, column=6, value=f"=SUM({pnl_col_letter}{first_data_row}:{pnl_col_letter}{last_data_row})")
+    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=6).border = thin_border
+    ws.cell(row=row, column=6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    ws.cell(row=row, column=alloc_col, value=f"={market_value_col_letter}{row}/B4*100")
     ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
     ws.cell(row=row, column=alloc_col).border = thin_border
-    ws.cell(row=row, column=alloc_col).fill = total_fill
-    ws.cell(row=row, column=alloc_col).number_format = '0.00"%"'
+    ws.cell(row=row, column=alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=alloc_col).number_format = "0.00\%"
+    
+    row += 1
 
-    row += 2
-
+    row += 1
     ws.cell(row=row, column=1, value="Equity ETF").font = Font(bold=True)
     row += 1
 
@@ -196,9 +355,8 @@ def excel_generator(df):
     ws.cell(row=row, column=alloc_col).fill = header_fill
     ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
     ws.cell(row=row, column=alloc_col).border = thin_border
-
+    
     row += 1
-    etf_equity_start_row = row
 
     for _, data_row in etf_equity.iterrows():
         for old_idx in equity_cols_to_keep:
@@ -211,29 +369,76 @@ def excel_generator(df):
                 ws.cell(row=row, column=new_idx).border = thin_border
         row += 1
 
-    etf_equity_total_row = row
-    ws.cell(row=row, column=1, value="Total:").font = Font(bold=True)
-    ws.cell(row=row, column=1).border = thin_border
-    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1).fill = total_fill
-    
-    for col_idx, old_idx in enumerate(equity_cols_to_keep[1:], 1):
-        new_idx = equity_col_map[old_idx]
-        col_letter = get_column_letter(new_idx)
-        ws.cell(row=row, column=new_idx, value=f"=SUM({col_letter}{etf_equity_start_row}:{col_letter}{row-1})")
-        ws.cell(row=row, column=new_idx).border = thin_border
-        ws.cell(row=row, column=new_idx).alignment = Alignment(horizontal="center")
-        ws.cell(row=row, column=new_idx).fill = total_fill
+    for idx, value in enumerate(etf_equity_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1).border = thin_border
+            ws.cell(row=row, column=idx + 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1).font = Font(bold=True)
+            
+    if total_portfolio_value > 0:
+        etf_equity_percent = (etf_equity_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=alloc_col, value=f"{format_num(etf_equity_percent)}%")
+        ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=alloc_col).border = thin_border
+        ws.cell(row=row, column=alloc_col).fill = total_fill
+        
+    for idx, value in enumerate(etf_equity_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1).border = thin_border
+            ws.cell(row=row, column=idx + 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1).font = Font(bold=True)
+                
+    if total_portfolio_value > 0:
+        etf_equity_percent = (etf_equity_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=alloc_col, value=f"{format_num(etf_equity_percent)}%")
+        ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=alloc_col).border = thin_border
+        ws.cell(row=row, column=alloc_col).fill = total_fill
 
-    col_letter = get_column_letter(5)  
-    ws.cell(row=row, column=alloc_col, value=f"={col_letter}{row}/$B${row_portfolio}*100")
+    
+    row += 1
+    ws.cell(row=row, column=1, value="Dynamic Total:")
+    ws.cell(row=row, column=1).font = Font(bold=True)
+    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=1).border = thin_border
+    ws.cell(row=row, column=1).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    for col_idx in [2, 3, 4]:
+        ws.cell(row=row, column=col_idx).border = thin_border
+        ws.cell(row=row, column=col_idx).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    first_data_row = row - len(etf_equity) - 1
+    last_data_row = row - 2
+    ws.cell(row=row, column=5, value=f"=SUM({market_value_col_letter}{first_data_row}:{market_value_col_letter}{last_data_row})")
+    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=5).border = thin_border
+    ws.cell(row=row, column=5).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    ws.cell(row=row, column=6, value=f"=SUM({pnl_col_letter}{first_data_row}:{pnl_col_letter}{last_data_row})")
+    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=6).border = thin_border
+    ws.cell(row=row, column=6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    ws.cell(row=row, column=alloc_col, value=f"={market_value_col_letter}{row}/B4*100")
     ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
     ws.cell(row=row, column=alloc_col).border = thin_border
-    ws.cell(row=row, column=alloc_col).fill = total_fill
-    ws.cell(row=row, column=alloc_col).number_format = '0.00"%"'
+    ws.cell(row=row, column=alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=alloc_col).number_format = "0.00\%"    
         
-    row += 2
+    row += 1
 
+    row += 1
     ws.cell(row=row, column=1, value="Equity Mutual Fund").font = Font(bold=True)
     row += 1
 
@@ -259,7 +464,6 @@ def excel_generator(df):
     ws.cell(row=row, column=alloc_col).border = thin_border
 
     row += 1
-    equity_mf_start_row = row
 
     for _, data_row in equity_mf.iterrows():
         for old_idx in mf_cols_to_keep:
@@ -272,28 +476,76 @@ def excel_generator(df):
                 ws.cell(row=row, column=new_idx).border = thin_border
         row += 1
 
-    equity_mf_total_row = row
-    ws.cell(row=row, column=1, value="Total:").font = Font(bold=True)
-    ws.cell(row=row, column=1).border = thin_border
-    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1).fill = total_fill
-    
-    for col_idx, old_idx in enumerate(mf_cols_to_keep[1:], 1):
-        new_idx = mf_col_map[old_idx]
-        col_letter = get_column_letter(new_idx)
-        ws.cell(row=row, column=new_idx, value=f"=SUM({col_letter}{equity_mf_start_row}:{col_letter}{row-1})")
-        ws.cell(row=row, column=new_idx).border = thin_border
-        ws.cell(row=row, column=new_idx).alignment = Alignment(horizontal="center")
-        ws.cell(row=row, column=new_idx).fill = total_fill
-
-    col_letter = get_column_letter(6)  
-    ws.cell(row=row, column=alloc_col, value=f"={col_letter}{row}/$B${row_portfolio}*100")
+    for idx, value in enumerate(equity_mf_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1).border = thin_border
+            ws.cell(row=row, column=idx + 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1).font = Font(bold=True)
+            
+    if total_portfolio_value > 0:
+        equity_mf_percent = (equity_mf_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=alloc_col, value=f"{format_num(equity_mf_percent)}%")
+        ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=alloc_col).border = thin_border
+        ws.cell(row=row, column=alloc_col).fill = total_fill
+        
+    for idx, value in enumerate(equity_mf_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1).border = thin_border
+            ws.cell(row=row, column=idx + 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1).font = Font(bold=True)
+            
+    if total_portfolio_value > 0:
+        equity_mf_percent = (equity_mf_market_value / total_portfolio_value) * 100
+    ws.cell(row=row, column=alloc_col, value=f"{format_num(equity_mf_percent)}%")
     ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
     ws.cell(row=row, column=alloc_col).border = thin_border
     ws.cell(row=row, column=alloc_col).fill = total_fill
-    ws.cell(row=row, column=alloc_col).number_format = '0.00"%"'
-        
-    row += 2
+
+    
+    row += 1
+    ws.cell(row=row, column=1, value="Dynamic Total:")
+    ws.cell(row=row, column=1).font = Font(bold=True)
+    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=1).border = thin_border
+    ws.cell(row=row, column=1).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    for col_idx in [2, 3, 4]:
+        ws.cell(row=row, column=col_idx).border = thin_border
+        ws.cell(row=row, column=col_idx).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    mf_market_value_col_letter = get_column_letter(5)
+    mf_pnl_col_letter = get_column_letter(6)
+    first_data_row = row - len(equity_mf) - 1
+    last_data_row = row - 2
+    ws.cell(row=row, column=5, value=f"=SUM({mf_market_value_col_letter}{first_data_row}:{mf_market_value_col_letter}{last_data_row})")
+    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=5).border = thin_border
+    ws.cell(row=row, column=5).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    ws.cell(row=row, column=6, value=f"=SUM({mf_pnl_col_letter}{first_data_row}:{mf_pnl_col_letter}{last_data_row})")
+    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=6).border = thin_border
+    ws.cell(row=row, column=6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    ws.cell(row=row, column=alloc_col, value=f"={mf_market_value_col_letter}{row}/B4*100")
+    ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=alloc_col).border = thin_border
+    ws.cell(row=row, column=alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=alloc_col).number_format = "0.00\%"    
+    
+    row += 1
 
     col_offset = 9  
     row = 5
@@ -322,7 +574,6 @@ def excel_generator(df):
     ws.cell(row=row, column=right_alloc_col).border = thin_border
 
     row += 1
-    debt_etf_start_row = row
 
     for _, data_row in debt_etf.iterrows():
         for old_idx in equity_cols_to_keep:
@@ -335,32 +586,81 @@ def excel_generator(df):
                 ws.cell(row=row, column=new_idx + col_offset - 1).border = thin_border
         row += 1
 
-    debt_etf_total_row = row
-    ws.cell(row=row, column=1 + col_offset - 1, value="Total:").font = Font(bold=True)
-    ws.cell(row=row, column=1 + col_offset - 1).border = thin_border
-    ws.cell(row=row, column=1 + col_offset - 1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1 + col_offset - 1).fill = total_fill
-    
-    for col_idx, old_idx in enumerate(equity_cols_to_keep[1:], 1):
-        new_idx = equity_col_map[old_idx]
-        col_letter = get_column_letter(new_idx + col_offset - 1)
-        start_row = debt_etf_start_row
-        end_row = row - 1
-        if end_row >= start_row:  
-            ws.cell(row=row, column=new_idx + col_offset - 1, value=f"=SUM({col_letter}{start_row}:{col_letter}{end_row})")
-        ws.cell(row=row, column=new_idx + col_offset - 1).border = thin_border
-        ws.cell(row=row, column=new_idx + col_offset - 1).alignment = Alignment(horizontal="center")
-        ws.cell(row=row, column=new_idx + col_offset - 1).fill = total_fill
+    for idx, value in enumerate(debt_etf_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).border = thin_border
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1 + col_offset - 1).font = Font(bold=True)
+            
+    if total_portfolio_value > 0:
+        debt_etf_percent = (debt_etf_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=right_alloc_col, value=f"{format_num(debt_etf_percent)}%")
+        ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=right_alloc_col).border = thin_border
+        ws.cell(row=row, column=right_alloc_col).fill = total_fill
+        
+    for idx, value in enumerate(debt_etf_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).border = thin_border
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1 + col_offset - 1).font = Font(bold=True)
+            
+    if total_portfolio_value > 0:
+        debt_etf_percent = (debt_etf_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=right_alloc_col, value=f"{format_num(debt_etf_percent)}%")
+        ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=right_alloc_col).border = thin_border
+        ws.cell(row=row, column=right_alloc_col).fill = total_fill
 
-    col_letter = get_column_letter(5 + col_offset - 1)  
-    ws.cell(row=row, column=right_alloc_col, value=f"={col_letter}{row}/$B${row_portfolio}*100")
+    
+    row += 1
+    ws.cell(row=row, column=col_offset, value="Dynamic Total:")
+    ws.cell(row=row, column=col_offset).font = Font(bold=True)
+    ws.cell(row=row, column=col_offset).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=col_offset).border = thin_border
+    ws.cell(row=row, column=col_offset).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    for col_idx in [col_offset + 1, col_offset + 2, col_offset + 3]:
+        ws.cell(row=row, column=col_idx).border = thin_border
+        ws.cell(row=row, column=col_idx).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    right_market_value_col = col_offset + 4
+    right_pnl_col = col_offset + 5
+    right_market_col_letter = get_column_letter(right_market_value_col)
+    right_pnl_col_letter = get_column_letter(right_pnl_col)
+
+    first_data_row = row - len(debt_etf) - 1
+    last_data_row = row - 2
+    ws.cell(row=row, column=right_market_value_col, value=f"=SUM({right_market_col_letter}{first_data_row}:{right_market_col_letter}{last_data_row})")
+    ws.cell(row=row, column=right_market_value_col).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=right_market_value_col).border = thin_border
+    ws.cell(row=row, column=right_market_value_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    ws.cell(row=row, column=right_pnl_col, value=f"=SUM({right_pnl_col_letter}{first_data_row}:{right_pnl_col_letter}{last_data_row})")
+    ws.cell(row=row, column=right_pnl_col).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=right_pnl_col).border = thin_border
+    ws.cell(row=row, column=right_pnl_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    ws.cell(row=row, column=right_alloc_col, value=f"={right_market_col_letter}{row}/B4*100")
     ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
     ws.cell(row=row, column=right_alloc_col).border = thin_border
-    ws.cell(row=row, column=right_alloc_col).fill = total_fill
-    ws.cell(row=row, column=right_alloc_col).number_format = '0.00"%"'
+    ws.cell(row=row, column=right_alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=right_alloc_col).number_format = "0.00\%"    
         
-    row += 2
+    row += 1
 
+    row += 1
     ws.cell(row=row, column=col_offset, value="Debt Mutual Fund").font = Font(bold=True)
     row += 1
 
@@ -382,7 +682,6 @@ def excel_generator(df):
     ws.cell(row=row, column=right_alloc_col).border = thin_border
 
     row += 1
-    debt_mf_start_row = row
 
     for _, data_row in debt_mf.iterrows():
         for old_idx in mf_cols_to_keep:
@@ -395,33 +694,81 @@ def excel_generator(df):
                 ws.cell(row=row, column=new_idx + col_offset - 1).border = thin_border
         row += 1
 
-    debt_mf_total_row = row
-    ws.cell(row=row, column=1 + col_offset - 1, value="Total:").font = Font(bold=True)
-    ws.cell(row=row, column=1 + col_offset - 1).border = thin_border
-    ws.cell(row=row, column=1 + col_offset - 1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1 + col_offset - 1).fill = total_fill
-    
-    for col_idx, old_idx in enumerate(mf_cols_to_keep[1:], 1):
-        new_idx = mf_col_map[old_idx]
-        col_letter = get_column_letter(new_idx + col_offset - 1)
-        start_row = debt_mf_start_row
-        end_row = row - 1
-        if end_row >= start_row:  
-            ws.cell(row=row, column=new_idx + col_offset - 1, value=f"=SUM({col_letter}{start_row}:{col_letter}{end_row})")
-        ws.cell(row=row, column=new_idx + col_offset - 1).border = thin_border
-        ws.cell(row=row, column=new_idx + col_offset - 1).alignment = Alignment(horizontal="center")
-        ws.cell(row=row, column=new_idx + col_offset - 1).fill = total_fill
+    for idx, value in enumerate(debt_mf_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).border = thin_border
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1 + col_offset - 1).font = Font(bold=True)
 
-    col_letter = get_column_letter(6 + col_offset - 1)  
-    ws.cell(row=row, column=right_alloc_col, value=f"={col_letter}{row}/$B${row_portfolio}*100")
+    if total_portfolio_value > 0:
+        debt_mf_percent = (debt_mf_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset, value=f"{format_num(debt_mf_percent)}%")
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset).border = thin_border
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset).fill = total_fill
+    
+    for idx, value in enumerate(debt_mf_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).border = thin_border
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1 + col_offset - 1).font = Font(bold=True)
+
+    if total_portfolio_value > 0:
+        debt_mf_percent = (debt_mf_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset, value=f"{format_num(debt_mf_percent)}%")
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset).border = thin_border
+        ws.cell(row=row, column=len(mf_cols_to_keep) + col_offset).fill = total_fill
+
+    
+    row += 1
+    ws.cell(row=row, column=col_offset, value="Dynamic Total:")
+    ws.cell(row=row, column=col_offset).font = Font(bold=True)
+    ws.cell(row=row, column=col_offset).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=col_offset).border = thin_border
+    ws.cell(row=row, column=col_offset).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    for col_idx in [col_offset + 1, col_offset + 2, col_offset + 3]:
+        ws.cell(row=row, column=col_idx).border = thin_border
+        ws.cell(row=row, column=col_idx).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    right_mf_market_col = col_offset + 4
+    right_mf_pnl_col = col_offset + 5
+    right_mf_market_letter = get_column_letter(right_mf_market_col)
+    right_mf_pnl_letter = get_column_letter(right_mf_pnl_col)
+
+    first_data_row = row - len(debt_mf) - 1
+    last_data_row = row - 2
+    ws.cell(row=row, column=right_mf_market_col, value=f"=SUM({right_mf_market_letter}{first_data_row}:{right_mf_market_letter}{last_data_row})")
+    ws.cell(row=row, column=right_mf_market_col).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=right_mf_market_col).border = thin_border
+    ws.cell(row=row, column=right_mf_market_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    ws.cell(row=row, column=right_mf_pnl_col, value=f"=SUM({right_mf_pnl_letter}{first_data_row}:{right_mf_pnl_letter}{last_data_row})")
+    ws.cell(row=row, column=right_mf_pnl_col).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=right_mf_pnl_col).border = thin_border
+    ws.cell(row=row, column=right_mf_pnl_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    ws.cell(row=row, column=right_alloc_col, value=f"={right_mf_market_letter}{row}/B4*100")
     ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
     ws.cell(row=row, column=right_alloc_col).border = thin_border
-    ws.cell(row=row, column=right_alloc_col).fill = total_fill
-    ws.cell(row=row, column=right_alloc_col).number_format = '0.00"%"'
-        
-    row += 2
-
+    ws.cell(row=row, column=right_alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=right_alloc_col).number_format = "0.00\%"
+    
     row += 1
+
+    row += 2
     ws.cell(row=row, column=col_offset, value="BONDS").font = Font(bold=True)
     row += 1
 
@@ -443,11 +790,10 @@ def excel_generator(df):
     ws.cell(row=row, column=right_alloc_col).border = thin_border
 
     row += 1
-    bond_start_row = row
 
     for _, data_row in bond_data.iterrows():
         for old_idx in bond_cols_to_keep:
-            new_idx = equity_col_map[old_idx]  
+            new_idx = equity_col_map[old_idx]
             value = data_row[old_idx]
             if not pd.isna(value):
                 cell_value = format_num(value)
@@ -456,95 +802,81 @@ def excel_generator(df):
                 ws.cell(row=row, column=new_idx + col_offset - 1).border = thin_border
         row += 1
 
-    bond_total_row = row
-    ws.cell(row=row, column=1 + col_offset - 1, value="Total:").font = Font(bold=True)
-    ws.cell(row=row, column=1 + col_offset - 1).border = thin_border
-    ws.cell(row=row, column=1 + col_offset - 1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1 + col_offset - 1).fill = total_fill
+    for idx, value in enumerate(bond_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).border = thin_border
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1 + col_offset - 1).font = Font(bold=True)
+            
+    if total_portfolio_value > 0:
+        bond_percent = (bond_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=right_alloc_col, value=f"{format_num(bond_percent)}%")
+        ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=right_alloc_col).border = thin_border
+        ws.cell(row=row, column=right_alloc_col).fill = total_fill
     
-    for col_idx, old_idx in enumerate(bond_cols_to_keep[1:], 1):
-        new_idx = equity_col_map[old_idx]
-        col_letter = get_column_letter(new_idx + col_offset - 1)
-        start_row = bond_start_row
-        end_row = row - 1
-        if end_row >= start_row:  
-            ws.cell(row=row, column=new_idx + col_offset - 1, value=f"=SUM({col_letter}{start_row}:{col_letter}{end_row})")
-        ws.cell(row=row, column=new_idx + col_offset - 1).border = thin_border
-        ws.cell(row=row, column=new_idx + col_offset - 1).alignment = Alignment(horizontal="center")
-        ws.cell(row=row, column=new_idx + col_offset - 1).fill = total_fill
+    for idx, value in enumerate(bond_total):
+        if value is not None and value != '':
+            cell_value = format_num(value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1, value=cell_value)
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).border = thin_border
+            ws.cell(row=row, column=idx + 1 + col_offset - 1).fill = total_fill
+            if idx == 0:
+                ws.cell(row=row, column=idx + 1 + col_offset - 1).font = Font(bold=True)
+            
+    if total_portfolio_value > 0:
+        bond_percent = (bond_market_value / total_portfolio_value) * 100
+        ws.cell(row=row, column=right_alloc_col, value=f"{format_num(bond_percent)}%")
+        ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=right_alloc_col).border = thin_border
+        ws.cell(row=row, column=right_alloc_col).fill = total_fill
 
-    col_letter = get_column_letter(5 + col_offset - 1)  
-    ws.cell(row=row, column=right_alloc_col, value=f"={col_letter}{row}/$B${row_portfolio}*100")
+    
+    row += 1
+    ws.cell(row=row, column=col_offset, value="Dynamic Total:")
+    ws.cell(row=row, column=col_offset).font = Font(bold=True)
+    ws.cell(row=row, column=col_offset).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=col_offset).border = thin_border
+    ws.cell(row=row, column=col_offset).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    for col_idx in [col_offset + 1, col_offset + 2, col_offset + 3]:
+        ws.cell(row=row, column=col_idx).border = thin_border
+        ws.cell(row=row, column=col_idx).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    bond_market_col = col_offset + 4
+    bond_pnl_col = col_offset + 5
+    bond_market_letter = get_column_letter(bond_market_col)
+    bond_pnl_letter = get_column_letter(bond_pnl_col)
+
+    first_data_row = row - len(bond_data) - 1
+    last_data_row = row - 2
+    ws.cell(row=row, column=bond_market_col, value=f"=SUM({bond_market_letter}{first_data_row}:{bond_market_letter}{last_data_row})")
+    ws.cell(row=row, column=bond_market_col).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=bond_market_col).border = thin_border
+    ws.cell(row=row, column=bond_market_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    ws.cell(row=row, column=bond_pnl_col, value=f"=SUM({bond_pnl_letter}{first_data_row}:{bond_pnl_letter}{last_data_row})")
+    ws.cell(row=row, column=bond_pnl_col).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=bond_pnl_col).border = thin_border
+    ws.cell(row=row, column=bond_pnl_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+
+    
+    ws.cell(row=row, column=right_alloc_col, value=f"={bond_market_letter}{row}/B4*100")
     ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
     ws.cell(row=row, column=right_alloc_col).border = thin_border
-    ws.cell(row=row, column=right_alloc_col).fill = total_fill
-    ws.cell(row=row, column=right_alloc_col).number_format = '0.00"%"'
-
+    ws.cell(row=row, column=right_alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=right_alloc_col).number_format = "0.00\%"
+        
     row += 2
-    equity_total_row = row
-    ws.cell(row=row, column=1, value="TOTAL EQUITY").font = Font(bold=True)
-    ws.cell(row=row, column=1).border = thin_border
-    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1).fill = portfolio_value_fill
 
-    market_val_col = get_column_letter(5)  
-    mf_market_val_col = get_column_letter(6)  
-    ws.cell(row=row, column=5, value=f"={market_val_col}{direct_equity_total_row}+{market_val_col}{etf_equity_total_row}+{mf_market_val_col}{equity_mf_total_row}")
-    ws.cell(row=row, column=5).border = thin_border
-    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=5).fill = portfolio_value_fill
-
-    pnl_col = get_column_letter(6)  
-    mf_pnl_col = get_column_letter(6)
-    ws.cell(row=row, column=6, value=f"={pnl_col}{direct_equity_total_row}+{pnl_col}{etf_equity_total_row}+{mf_pnl_col}{equity_mf_total_row}")
-    ws.cell(row=row, column=6).border = thin_border
-    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=6).fill = portfolio_value_fill
-
-    ws.cell(row=row, column=alloc_col, value=f"={market_val_col}{row}/$B${row_portfolio}*100")
-    ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=alloc_col).border = thin_border
-    ws.cell(row=row, column=alloc_col).fill = portfolio_value_fill
-    ws.cell(row=row, column=alloc_col).number_format = '0.00"%"'
-
-    debt_total_row = row
-    ws.cell(row=row, column=1 + col_offset - 1, value="TOTAL DEBT").font = Font(bold=True)
-    ws.cell(row=row, column=1 + col_offset - 1).border = thin_border
-    ws.cell(row=row, column=1 + col_offset - 1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=1 + col_offset - 1).fill = portfolio_value_fill
-
-    debt_market_val_col = get_column_letter(5 + col_offset - 1)  
-    debt_mf_market_val_col = get_column_letter(6 + col_offset - 1)  
-    bond_market_val_col = get_column_letter(5 + col_offset - 1) 
-    ws.cell(row=row, column=5 + col_offset - 1, value=f"={debt_market_val_col}{debt_etf_total_row}+{debt_mf_market_val_col}{debt_mf_total_row}+{bond_market_val_col}{bond_total_row}")
-    ws.cell(row=row, column=5 + col_offset - 1).border = thin_border
-    ws.cell(row=row, column=5 + col_offset - 1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=5 + col_offset - 1).fill = portfolio_value_fill
-
-    debt_pnl_col = get_column_letter(6 + col_offset - 1)  
-    debt_mf_pnl_col = get_column_letter(6 + col_offset - 1)  
-    bond_pnl_col = get_column_letter(6 + col_offset - 1)  
-    ws.cell(row=row, column=6 + col_offset - 1, value=f"={debt_pnl_col}{debt_etf_total_row}+{debt_mf_pnl_col}{debt_mf_total_row}+{bond_pnl_col}{bond_total_row}")
-    ws.cell(row=row, column=6 + col_offset - 1).border = thin_border
-    ws.cell(row=row, column=6 + col_offset - 1).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=6 + col_offset - 1).fill = portfolio_value_fill
-
-    ws.cell(row=row, column=right_alloc_col, value=f"={debt_market_val_col}{row}/$B${row_portfolio}*100")
-    ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=right_alloc_col).border = thin_border
-    ws.cell(row=row, column=right_alloc_col).fill = portfolio_value_fill
-    ws.cell(row=row, column=right_alloc_col).number_format = '0.00"%"'
-
-    market_val_col = get_column_letter(5)  
-    debt_market_val_col = get_column_letter(5 + col_offset - 1)  
-    ws.cell(row=row_portfolio, column=2, value=f"={market_val_col}{equity_total_row}+{debt_market_val_col}{debt_total_row}")
-    ws.cell(row=row_portfolio, column=2).fill = portfolio_value_fill
-    ws.cell(row=row_portfolio, column=2).number_format = '#,##0.00'
-
-    for col_idx in range(1, ws.max_column + 1):
-        ws.column_dimensions[get_column_letter(col_idx)].width = 15
-
-    output_filename = f"{client_code}_{client_name}_Portfolio.xlsx"
+    output_filename = f"{client_code}_Portfolio.xlsx"
     wb.save(output_filename)
-    
+
     return output_filename
