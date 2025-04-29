@@ -22,11 +22,11 @@ class FileDropZone(QFrame):
         self.setFrameShape(QFrame.Box)
         self.setFrameShadow(QFrame.Sunken)
         self.setStyleSheet("""
-            background-color: 
-            border: 2px dashed 
-            border-radius: 5px;
-            padding: 5px;
-            min-height: 100px;
+        background-color: #f0f0f0;
+        border: 2px dashed #aaaaaa;
+        border-radius: 5px;
+        padding: 5px;
+        min-height: 100px;
         """)
         
         layout = QVBoxLayout()
@@ -51,20 +51,20 @@ class FileDropZone(QFrame):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
             self.setStyleSheet("""
-                background-color: 
-                border: 2px dashed 
-                border-radius: 5px;
-                padding: 5px;
-                min-height: 100px;
+            background-color: #e0f0ff;
+            border: 2px dashed #5599ff;
+            border-radius: 5px;
+            padding: 5px;
+            min-height: 100px;
             """)
     
     def dragLeaveEvent(self, event):
         self.setStyleSheet("""
-            background-color: 
-            border: 2px dashed 
-            border-radius: 5px;
-            padding: 5px;
-            min-height: 100px;
+        background-color: #f0f0f0;
+        border: 2px dashed #aaaaaa;
+        border-radius: 5px;
+        padding: 5px;
+        min-height: 100px;
         """)
     
     def dropEvent(self, event: QDropEvent):
@@ -109,10 +109,10 @@ class UploadedFilesDisplay(QFrame):
         self.setFrameShape(QFrame.Box)
         self.setFrameShadow(QFrame.Sunken)
         self.setStyleSheet("""
-            background-color: white;
-            border: 1px solid 
-            border-radius: 5px;
-            padding: 5px;
+        background-color: white;
+        border: 1px solid #cccccc;
+        border-radius: 5px;
+        padding: 5px;
         """)
         
         self.layout = QGridLayout()
@@ -192,9 +192,9 @@ class Main(QMainWindow):
         self.setWindowTitle("REPORT IQ")
         self.setGeometry(100, 100, 500, 600)
         self.setStyleSheet("""
-            background-color: 
-            font-family: Arial;
-            font-size: 12px;
+        background-color: #f5f5f5;
+        font-family: Arial;
+        font-size: 12px;
         """)
 
         layout = QVBoxLayout()
@@ -202,10 +202,10 @@ class Main(QMainWindow):
         title = QLabel("REPORT IQ")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("""
-            font-size: 20px;
-            font-weight: bold;
-            color: 
-            padding: 10px;
+        font-size: 20px;
+        font-weight: bold;
+        color: #3366cc;
+        padding: 10px;
         """)
         layout.addWidget(title)
 
@@ -234,11 +234,11 @@ class Main(QMainWindow):
 
         login_btn = QPushButton("LOGIN")
         login_btn.setStyleSheet("""
-            background-color: 
-            color: white;  
-            font-weight: bold;
-            padding: 3px 10px;
-            border-radius: 5px;
+        background-color: #4CAF50;
+        color: white;  
+        font-weight: bold;
+        padding: 3px 10px;
+        border-radius: 5px;
         """)
         login_btn.clicked.connect(self.login)
         layout.addWidget(login_btn)
@@ -256,7 +256,7 @@ class Main(QMainWindow):
         upload_title.setStyleSheet("""
             font-size: 16px;
             font-weight: bold;
-            color: 
+            color: #3366cc;
             padding: 5px;
         """)
         upload_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -280,7 +280,7 @@ class Main(QMainWindow):
 
         self.excel_btn = QPushButton("LOAD CLIENT EXCEL FILE")
         self.excel_btn.setStyleSheet("""
-            background-color: 
+            background-color: #2196F3;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -292,7 +292,7 @@ class Main(QMainWindow):
         
         proc_btn = QPushButton("PROCESS HOLDINGS")
         proc_btn.setStyleSheet("""
-            background-color: 
+            background-color: #2196F3;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -303,7 +303,7 @@ class Main(QMainWindow):
 
         proc_mf_btn = QPushButton("PROCESS MF TRANSACTIONS")
         proc_mf_btn.setStyleSheet("""
-            background-color: 
+            background-color: #2196F3;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -315,23 +315,23 @@ class Main(QMainWindow):
         
         generate_report_btn = QPushButton("GENERATE REPORT")
         generate_report_btn.setStyleSheet("""
-            background-color: 
+            background-color: #FF9800;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
             border-radius: 5px;
-            """)
+        """)
         generate_report_btn.clicked.connect(self.generate_report)
         layout.addWidget(generate_report_btn)
 
         generate_excel_btn = QPushButton("GENERATE EXCEL")
         generate_excel_btn.setStyleSheet("""
-            background-color: 
+            background-color: #FF9800;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
             border-radius: 5px;
-            """)
+        """)
         generate_excel_btn.clicked.connect(self.generate_excel)
         layout.addWidget(generate_excel_btn)
         
