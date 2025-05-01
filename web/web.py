@@ -267,7 +267,7 @@ class Scraper:
             self.log(f"❌ Error processing holdings for {code}: {str(e)}")
             return False
     
-    def dl_mf_transactions(self, code):
+    def dl_mf_transactions(self, code, from_date=None, to_date=None):
         try:
             self.log(f"📊 Navigating to MF transactions for {code}")
             wait = WebDriverWait(self.driver, 15)
@@ -282,6 +282,39 @@ class Scraper:
                     By.LINK_TEXT, "Mutual Fund")))
                 mf_section.click()
                 time.sleep(3)
+                
+                if from_date and to_date:
+                    try:
+                        self.log(f"Setting date range: {from_date} to {to_date}")
+                        
+                        try:
+                            from_date_input = wait.until(EC.element_to_be_clickable((
+                                By.XPATH, "//input[contains(@id, 'From') or contains(@id, 'from') or contains(@placeholder, 'From')]")))
+                            from_date_input.clear()
+                            from_date_input.send_keys(from_date)
+                            self.log(f"Set From date to {from_date}")
+                        except Exception as e:
+                            self.log(f"⚠️ Could not set From date: {str(e)}")
+                        
+                        try:
+                            to_date_input = wait.until(EC.element_to_be_clickable((
+                                By.XPATH, "//input[contains(@id, 'To') or contains(@id, 'to') or contains(@placeholder, 'To')]")))
+                            to_date_input.clear()
+                            to_date_input.send_keys(to_date)
+                            self.log(f"Set To date to {to_date}")
+                        except Exception as e:
+                            self.log(f"⚠️ Could not set To date: {str(e)}")
+                        
+                        try:
+                            search_btn = wait.until(EC.element_to_be_clickable((
+                                By.XPATH, "//button[contains(text(), 'Submit') or contains(text(), 'Search') or contains(text(), 'Go')]")))
+                            search_btn.click()
+                            time.sleep(3)
+                        except Exception as e:
+                            self.log(f"⚠️ Could not click search button: {str(e)}")
+                    except Exception as e:
+                        self.log(f"⚠️ Error setting date range: {str(e)}")
+                
             except Exception as e:
                 self.log(f"⚠️ Error navigating to MF transactions menu: {str(e)}")
                 return False
@@ -347,7 +380,7 @@ class Scraper:
             self.log(f"❌ Error downloading MF transactions for {code}: {str(e)}")
             return False
         
-    def search_client_mf_trans(self, code):
+    def search_client_mf_trans(self, code, from_date=None, to_date=None):
         self.log(f"🔎 Processing client MF transactions: {code}")
         wait = WebDriverWait(self.driver, 15)
         retry_count = 0
@@ -423,7 +456,7 @@ class Scraper:
                         self.driver.switch_to.window(client_dashboard_tab)
                     
                         
-                        result = self.dl_mf_transactions(code)
+                        result = self.dl_mf_transactions(code, from_date, to_date)
                     
                         
                         self.driver.close()
@@ -463,16 +496,20 @@ class Scraper:
             
         return False
 
-    def process_all_clients_mf_trans(self, codes, update_cb=None):
+    def process_all_clients_mf_trans(self, codes, update_cb=None, from_date=None, to_date=None):
         success = 0
         self.fail_list = []
+        
+        date_info = ""
+        if from_date and to_date:
+            date_info = f" with date range {from_date} to {to_date}"
     
         for i in range(0, len(codes), self.max_parallel):
             batch = codes[i:i+self.max_parallel]
-            self.log(f"🚀 Processing MF transactions batch: {batch}")
+            self.log(f"🚀 Processing MF transactions batch{date_info}: {batch}")
         
             for code in batch:
-                if self.search_client_mf_trans(code):
+                if self.search_client_mf_trans(code, from_date, to_date):
                     success += 1
                 else:
                     self.fail_list.append(code)
