@@ -1,6 +1,6 @@
 import pandas as pd
 from openpyxl import Workbook
-from utils.format import format_num, isn
+from utils.format import format_num
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.formula.translate import Translator
@@ -269,15 +269,13 @@ def excel_generator(df):
     for _, data_row in direct_equity.iterrows():
         for old_idx in equity_cols_to_keep:
             new_idx = equity_col_map[old_idx]
-            value = data_row[old_idx]
+            value = format_num(data_row[old_idx])
             if not pd.isna(value):
-                cell = ws.cell(row=row, column=new_idx, value=value)
-                if new_idx in [5, 6]:
-                    cell.number_format = '##,##,##0'
+                ws.cell(row=row, column=new_idx, value=value)
                 if old_idx == 0:
                     ws.cell(row=row, column=new_idx).alignment = Alignment(horizontal="left")
                 else:
-                    ws.cell(row=row, column=new_idx).alignment = Alignment(horizontal="center")
+                    ws.cell(row=row, column=new_idx).alignment = Alignment(horizontal="center") 
                 ws.cell(row=row, column=new_idx).border = thin_border
         row += 1
     
@@ -818,8 +816,6 @@ def excel_generator(df):
     ws.cell(row=4, column=2, value=portfolio_formula)
     
     wb.formula_attributes = {'calculate': 'on_load'}
-    
-    ws['F11'].number_format = '#,##,##0'
     
     output_filename = f"{client_code}_Portfolio.xlsx"
     wb.save(output_filename)

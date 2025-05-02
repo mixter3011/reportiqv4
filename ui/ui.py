@@ -741,55 +741,80 @@ class Main(QMainWindow):
             QMessageBox.critical(self, "Critical Error", err_msg)
     
     def process_mf_trans(self):
+        if not self.use_date_range.isChecked():
+            QMessageBox.warning(self, "Date Range Required", 
+                              "Please select the 'Use Date Range' checkbox and ensure dates are set before processing MF transactions.")
+            return
+
         missing_files = []
-    
         if "MF Transactions" not in self.required_files or self.required_files["MF Transactions"] is None:
             missing_files.append("MF Transactions")
-    
         if "SIP" not in self.required_files or self.required_files["SIP"] is None:
             missing_files.append("SIP")
-    
         if missing_files:
-            QMessageBox.warning(self, "Missing Files", 
-                            f"Please upload the following required files: {', '.join(missing_files)}")
+            QMessageBox.warning(self, "Missing Files",
+                f"Please upload the following required files: {', '.join(missing_files)}")
             return
     
-        folder = QFileDialog.getExistingDirectory(self, "Select MF transactions folder", self.dl_folder)
+        from_date = self.from_date.date().toString("dd/MM/yyyy")
+        to_date = self.to_date.date().toString("dd/MM/yyyy")
+        date_range_info = f" with date range: {from_date} to {to_date}"
+        self.log(f"Using date range: {from_date} to {to_date}")
     
-        if not folder:
-            QMessageBox.warning(self, "Error", "No folder selected.")
-            return
-
-        self.log(f"Processing MF transactions from: {folder}")
-
-        try:
-            date_range_info = ""
-            if hasattr(self, 'use_date_range') and self.use_date_range.isChecked():
-                from_date = self.from_date.date().toString("dd/MM/yyyy")
-                to_date = self.to_date.date().toString("dd/MM/yyyy")
-                date_range_info = f" with date range: {from_date} to {to_date}"
-                self.log(f"Using date range: {from_date} to {to_date}")
-
-            self.processor = Processor(folder)
+        if hasattr(self, 'codes') and hasattr(self, 'scraper') and self.scraper:
+            self.sum_lbl.setText("Processing MF transactions online...")
         
+            def update_mf_progress(success, total, fails):
+                self.sum_lbl.setText(f"MF Trans Progress: {success}/{total} Complete, {len(fails)} Failed")
+        
+            try:
+                success, fails = self.scraper.process_all_clients_mf_trans(
+                    self.codes, 
+                    update_cb=update_mf_progress,
+                    from_date=from_date,
+                    to_date=to_date
+                )
+            
+                self.sum_lbl.setText(f"MF Trans Summary: {success}/{len(self.codes)} Complete, {len(fails)} Failed")
+            
+                folder = self.mf_folder  
+                self.log(f"Processing downloaded MF transactions from: {folder}")
+                self._process_local_mf_files(folder, date_range_info)
+            
+            except Exception as e:
+                import traceback
+                error_details = traceback.format_exc()
+                print(f"Processing error: {error_details}")
+                err_msg = f"Error downloading MF transactions: {str(e)}"
+                self.log(err_msg)
+                QMessageBox.critical(self, "Critical Error", err_msg)
+        
+        else:
+            folder = QFileDialog.getExistingDirectory(self, "Select MF transactions folder", self.dl_folder)
+            if not folder:
+                QMessageBox.warning(self, "Error", "No folder selected.")
+                return
+            self.log(f"Processing MF transactions from: {folder}")
+            self._process_local_mf_files(folder, date_range_info)
+
+    def _process_local_mf_files(self, folder, date_range_info):
+        try:
+            self.processor = Processor(folder)
             if hasattr(self.processor, 'set_required_files'):
                 self.processor.set_required_files(
                     ledger=self.required_files.get("Ledger"),
                     mf_transactions=self.required_files["MF Transactions"],
                     sip=self.required_files["SIP"]
                 )
-        
             out_file = self.processor.run_mf_transactions()
-
             if out_file:
                 df = pd.read_excel(out_file)
                 count = df.shape[0]
-
                 self.sum_lbl.setText(
                     f"Processed MF transactions{date_range_info} for {count} clients.\n"
                     f"Report saved: {out_file}"
                 )
-                QMessageBox.information(self, "Success", 
+                QMessageBox.information(self, "Success",
                     f"MF transactions processing completed{date_range_info}!\n\n"
                     f"Clients processed: {count}\n"
                     f"Report saved: {out_file}")

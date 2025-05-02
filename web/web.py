@@ -497,12 +497,14 @@ class Scraper:
         return False
 
     def process_all_clients_mf_trans(self, codes, update_cb=None, from_date=None, to_date=None):
+        if not from_date or not to_date:
+            self.log("⚠️ Date range not provided for MF transactions. Skipping.")
+            return 0, codes  
+    
         success = 0
         self.fail_list = []
-        
-        date_info = ""
-        if from_date and to_date:
-            date_info = f" with date range {from_date} to {to_date}"
+    
+        date_info = f" with date range {from_date} to {to_date}"
     
         for i in range(0, len(codes), self.max_parallel):
             batch = codes[i:i+self.max_parallel]
@@ -516,7 +518,7 @@ class Scraper:
             
                 if update_cb:
                     update_cb(success, len(codes), self.fail_list)
-                
+            
             time.sleep(5)
     
         return success, self.fail_list
