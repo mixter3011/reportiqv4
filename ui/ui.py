@@ -1,157 +1,18 @@
 import os
 import glob
 import time
+from datetime import date
 import pandas as pd
 from generator.excel import excel_generator
 from generator.report import report_gen
+from generator.xirr import proc
 from web.web import Scraper
-from PyQt5.QtCore import Qt, QMimeData, QDate
+from PyQt5.QtCore import Qt, QDate
 from utils.processor import Processor
 from PyQt5.QtWidgets import (
     QMainWindow, QPushButton, QVBoxLayout, QWidget,
-    QFileDialog, QMessageBox, QLabel, QLineEdit, QHBoxLayout, QFrame, QGridLayout, QDateEdit, QCheckBox, QScrollArea
+    QFileDialog, QMessageBox, QLabel, QLineEdit, QHBoxLayout, QDateEdit, QCheckBox, QScrollArea
 )
-from PyQt5.QtGui import QDragEnterEvent, QDropEvent
-
-
-class FileDropZone(QFrame):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.setAcceptDrops(True)
-        self.setFrameShape(QFrame.Box)
-        self.setFrameShadow(QFrame.Sunken)
-        self.setStyleSheet("""
-        background-color: #f0f0f0;
-        border: 2px dashed #aaaaaa;
-        border-radius: 5px;
-        padding: 5px;
-        min-height: 100px;
-        """)
-        
-        layout = QVBoxLayout()
-        
-        self.title_label = QLabel("Upload Required Files")
-        self.title_label.setStyleSheet("font-weight: bold; color: black;")
-        layout.addWidget(self.title_label)
-        
-        self.status_label = QLabel("Drag & drop files here or click to select")
-        self.status_label.setStyleSheet("color: black;")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.status_label)
-        
-        file_types_label = QLabel("Required: Ledger, MF Transactions, SIP")
-        file_types_label.setStyleSheet("color: black;")
-        file_types_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(file_types_label)
-        
-        self.setLayout(layout)
-    
-    def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            self.setStyleSheet("""
-            background-color: #e0f0ff;
-            border: 2px dashed #5599ff;
-            border-radius: 5px;
-            padding: 5px;
-            min-height: 100px;
-            """)
-    
-    def dragLeaveEvent(self, event):
-        self.setStyleSheet("""
-        background-color: #f0f0f0;
-        border: 2px dashed #aaaaaa;
-        border-radius: 5px;
-        padding: 5px;
-        min-height: 100px;
-        """)
-    
-    def dropEvent(self, event: QDropEvent):
-        if event.mimeData().hasUrls():
-            file_paths = [url.toLocalFile() for url in event.mimeData().urls()]
-            self.process_files(file_paths)
-        
-        self.setStyleSheet("""
-            background-color: 
-            border: 2px dashed 
-            border-radius: 5px;
-            padding: 5px;
-            min-height: 100px;
-        """)
-    
-    def mousePressEvent(self, event):
-        file_paths, _ = QFileDialog.getOpenFileNames(
-            self, "Select Required Files", "", 
-            "All Files (*);;Excel Files (*.xlsx *.xls);;CSV Files (*.csv)"
-        )
-        if file_paths:
-            self.process_files(file_paths)
-    
-    def process_files(self, file_paths):
-        try:
-            if hasattr(self.parent, 'process_uploaded_files'):
-                self.parent.process_uploaded_files(file_paths)
-            
-            count = len(file_paths)
-            if count > 0:
-                self.status_label.setText(f"{count} file(s) uploaded")
-                self.status_label.setStyleSheet("color: black; font-weight: bold;")
-                
-        except Exception as e:
-            self.status_label.setText(f"Error: {str(e)}")
-            self.status_label.setStyleSheet("color: black; font-weight: bold;")
-
-
-class UploadedFilesDisplay(QFrame):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setFrameShape(QFrame.Box)
-        self.setFrameShadow(QFrame.Sunken)
-        self.setStyleSheet("""
-        background-color: white;
-        border: 1px solid #cccccc;
-        border-radius: 5px;
-        padding: 5px;
-        """)
-        
-        self.layout = QGridLayout()
-        self.layout.setColumnStretch(1, 1)  
-        
-        header_type = QLabel("File Type")
-        header_type.setStyleSheet("font-weight: bold; color: black;")
-        self.layout.addWidget(header_type, 0, 0)
-        
-        header_name = QLabel("File Name")
-        header_name.setStyleSheet("font-weight: bold; color: black;")
-        self.layout.addWidget(header_name, 0, 1)
-        
-        self.file_type_labels = {}
-        self.file_name_labels = {}
-        
-        row = 1
-        for file_type in ["Ledger", "MF Transactions", "SIP"]:
-            type_label = QLabel(f"{file_type}:")
-            type_label.setStyleSheet("color: black;")
-            self.layout.addWidget(type_label, row, 0)
-            
-            name_label = QLabel("Not uploaded")
-            name_label.setStyleSheet("color: black;")
-            self.layout.addWidget(name_label, row, 1)
-            
-            self.file_type_labels[file_type] = type_label
-            self.file_name_labels[file_type] = name_label
-            
-            row += 1
-        
-        self.setLayout(self.layout)
-    
-    def update_file(self, file_type, file_path):
-        if file_type in self.file_name_labels:
-            file_name = os.path.basename(file_path)
-            self.file_name_labels[file_type].setText(file_name)
-            self.file_name_labels[file_type].setStyleSheet("color: black; font-weight: bold;")
-
 
 class Main(QMainWindow):
     def __init__(self):
@@ -232,7 +93,7 @@ class Main(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to download holdings for {code}")
 
     def init_ui(self):
-        self.setWindowTitle("REPORT IQ")
+        self.setWindowTitle("PORTFOLIO RETURNS TRACKER")
         self.setGeometry(100, 100, 500, 600)
         self.setStyleSheet("""
         background-color: #f5f5f5;
@@ -242,34 +103,36 @@ class Main(QMainWindow):
 
         layout = QVBoxLayout()
         
-        title = QLabel("REPORT IQ")
+        title = QLabel("PORTFOLIO RETURNS TRACKER")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("""
         font-size: 20px;
         font-weight: bold;
-        color: #3366cc;
+        color: black;
         padding: 10px;
         """)
         layout.addWidget(title)
 
-        url_lbl = QLabel("Enter URL:")
+        url_lbl = QLabel("ENTER URL:")
         url_lbl.setStyleSheet("font-weight: bold; color: black;")
         self.url_in = QLineEdit()
-        self.url_in.setPlaceholderText("https://example.com")
+        self.url_in.setPlaceholderText("https://mofirst.motilaloswal.com")
         self.url_in.setStyleSheet("color: black;")
         layout.addWidget(url_lbl)
         layout.addWidget(self.url_in)
 
-        user_lbl = QLabel("Enter Username:")
+        user_lbl = QLabel("ENTER USERNAME:")
         user_lbl.setStyleSheet("font-weight: bold; color: black;")
         self.user_in = QLineEdit()
+        self.user_in.setPlaceholderText("ROHIT ABHAY")
         self.user_in.setStyleSheet("color: black;")
         layout.addWidget(user_lbl)
         layout.addWidget(self.user_in)
 
-        pass_lbl = QLabel("Enter Password:")
+        pass_lbl = QLabel("ENTER PASSWORD:")
         pass_lbl.setStyleSheet("font-weight: bold; color: black;")
         self.pass_in = QLineEdit()
+        self.pass_in.setPlaceholderText("******")
         self.pass_in.setEchoMode(QLineEdit.EchoMode.Password)
         self.pass_in.setStyleSheet("color: black;")
         layout.addWidget(pass_lbl)
@@ -277,7 +140,7 @@ class Main(QMainWindow):
 
         login_btn = QPushButton("LOGIN")
         login_btn.setStyleSheet("""
-        background-color: #4CAF50;
+        background-color: black;
         color: white;  
         font-weight: bold;
         padding: 3px 10px;
@@ -286,7 +149,7 @@ class Main(QMainWindow):
         login_btn.clicked.connect(self.login)
         layout.addWidget(login_btn)
 
-        self.status_lbl = QLabel("Status: Not logged in")
+        self.status_lbl = QLabel("STATUS: NOT LOGGED IN")
         self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_lbl.setStyleSheet("""
             font-weight: bold;
@@ -295,36 +158,39 @@ class Main(QMainWindow):
         """)
         layout.addWidget(self.status_lbl)
         
-        manual_input_title = QLabel("Manual Client Code Input")
+        manual_code_layout = QHBoxLayout()
+
+        manual_input_title = QLabel("CLIENT CODE")
         manual_input_title.setStyleSheet("""
             font-size: 14px;
             font-weight: bold;
-            color: #3366cc;
+            color: black;
             padding: 5px;
         """)
-        layout.addWidget(manual_input_title)
-        
-        manual_code_layout = QHBoxLayout()
+
         self.manual_code_input = QLineEdit()
-        self.manual_code_input.setPlaceholderText("Enter client code")
+        self.manual_code_input.setPlaceholderText("ROMO####")
         self.manual_code_input.setStyleSheet("color: black;")
-        manual_code_layout.addWidget(self.manual_code_input)
-        
-        manual_fetch_btn = QPushButton("Fetch")
+
+        manual_fetch_btn = QPushButton("LOAD")
         manual_fetch_btn.setStyleSheet("""
-            background-color: #4CAF50;
+            background-color: black;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
             border-radius: 5px;
         """)
         manual_fetch_btn.clicked.connect(self.fetch_manual_code)
+
+        manual_code_layout.addWidget(manual_input_title)
+        manual_code_layout.addWidget(self.manual_code_input)
         manual_code_layout.addWidget(manual_fetch_btn)
+
         layout.addLayout(manual_code_layout)
 
-        self.excel_btn = QPushButton("LOAD CLIENT EXCEL FILE")
+        self.excel_btn = QPushButton("LOAD CLIENT CODES EXCEL FILE")
         self.excel_btn.setStyleSheet("""
-            background-color: #2196F3;
+            background-color: black;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -334,18 +200,18 @@ class Main(QMainWindow):
         self.excel_btn.setEnabled(False)
         layout.addWidget(self.excel_btn)
         
-        mf_date_title = QLabel("MF Transaction Date Range")
+        mf_date_title = QLabel("DATE RANGE")
         mf_date_title.setStyleSheet("""
             font-size: 14px;
             font-weight: bold;
-            color: #3366cc;
+            color: black;
             padding: 5px;
         """)
         layout.addWidget(mf_date_title)
         
         date_layout = QHBoxLayout()
         
-        from_date_label = QLabel("From:")
+        from_date_label = QLabel("FROM:")
         from_date_label.setStyleSheet("color: black;")
         date_layout.addWidget(from_date_label)
         
@@ -354,7 +220,7 @@ class Main(QMainWindow):
         self.from_date.setStyleSheet("color: black;")
         date_layout.addWidget(self.from_date)
         
-        to_date_label = QLabel("To:")
+        to_date_label = QLabel("TO:")
         to_date_label.setStyleSheet("color: black;")
         date_layout.addWidget(to_date_label)
         
@@ -363,26 +229,15 @@ class Main(QMainWindow):
         self.to_date.setStyleSheet("color: black;")
         date_layout.addWidget(self.to_date)
         
-        self.use_date_range = QCheckBox("Use Date Range")
+        self.use_date_range = QCheckBox("USE RANGE")
         self.use_date_range.setStyleSheet("color: black;")
         date_layout.addWidget(self.use_date_range)
         
         layout.addLayout(date_layout)
         
-        proc_btn = QPushButton("PROCESS HOLDINGS")
-        proc_btn.setStyleSheet("""
-            background-color: #2196F3;
-            color: white;
-            font-weight: bold;
-            padding: 3px 10px;
-            border-radius: 5px;
-        """)
-        proc_btn.clicked.connect(self.process_hdng)
-        layout.addWidget(proc_btn)
-
-        proc_mf_btn = QPushButton("PROCESS MF TRANSACTIONS")
+        proc_mf_btn = QPushButton("DOWNLOAD MF TRANSACTIONS")
         proc_mf_btn.setStyleSheet("""
-            background-color: #2196F3;
+            background-color: black;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -390,22 +245,21 @@ class Main(QMainWindow):
         """)
         proc_mf_btn.clicked.connect(self.process_mf_trans)
         layout.addWidget(proc_mf_btn)
-        
-        
-        generate_report_btn = QPushButton("GENERATE REPORT")
-        generate_report_btn.setStyleSheet("""
-            background-color: #FF9800;
+
+        proc_btn = QPushButton("PROCESS HOLDINGS")
+        proc_btn.setStyleSheet("""
+            background-color: black;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
             border-radius: 5px;
         """)
-        generate_report_btn.clicked.connect(self.generate_report)
-        layout.addWidget(generate_report_btn)
-
-        generate_excel_btn = QPushButton("GENERATE EXCEL")
+        proc_btn.clicked.connect(self.process_hdng)
+        layout.addWidget(proc_btn)        
+        
+        generate_excel_btn = QPushButton("GENERATE INTERNAL REVIEW SHEET")
         generate_excel_btn.setStyleSheet("""
-            background-color: #FF9800;
+            background-color: black;
             color: white;
             font-weight: bold;
             padding: 3px 10px;
@@ -414,31 +268,108 @@ class Main(QMainWindow):
         generate_excel_btn.clicked.connect(self.generate_excel)
         layout.addWidget(generate_excel_btn)
         
-        upload_title = QLabel("Required Files")
-        upload_title.setStyleSheet("""
-            font-size: 16px;
-            font-weight: bold;
-            color: #3366cc;
-            padding: 5px;
-        """)
-        upload_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(upload_title)
+        start_date_layout = QHBoxLayout()
         
-        self.file_drop_zone = FileDropZone(self)
-        layout.addWidget(self.file_drop_zone)
+        start_date_label = QLabel("ENTER START DATE")
+        start_date_label.setStyleSheet("color: black;")
+        start_date_layout.addWidget(start_date_label)
         
-        uploaded_files_label = QLabel("Uploaded Files")
-        uploaded_files_label.setStyleSheet("""
+        self.start_date = QDateEdit(calendarPopup=True)
+        self.start_date.setDate(QDate.currentDate())
+        self.start_date.setStyleSheet("color: black;")
+        start_date_layout.addWidget(self.start_date)
+        
+        layout.addLayout(start_date_layout)
+        
+        xirr_code_layout = QHBoxLayout()
+
+        xirr_input_title = QLabel("ENTER CLIENT CODE FOR XIRR")
+        xirr_input_title.setStyleSheet("""
             font-size: 14px;
             font-weight: bold;
             color: black;
             padding: 5px;
         """)
-        uploaded_files_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        layout.addWidget(uploaded_files_label)
+
+        self.xirr_code_input = QLineEdit()
+        self.xirr_code_input.setPlaceholderText("ROMO####")
+        self.xirr_code_input.setStyleSheet("color: black;")
+
+        xirr_code_layout.addWidget(xirr_input_title)
+        xirr_code_layout.addWidget(self.xirr_code_input)
+
+        layout.addLayout(xirr_code_layout)
         
-        self.uploaded_files_display = UploadedFilesDisplay(self)
-        layout.addWidget(self.uploaded_files_display)
+        init_portfolio_val_layout = QHBoxLayout()
+
+        init_portfolio_val_title = QLabel("ENTER INITIAL PORTFOLIO VALUE")
+        init_portfolio_val_title.setStyleSheet("""
+            font-size: 14px;
+            font-weight: bold;
+            color: black;
+            padding: 5px;
+        """)
+
+        self.init_portfolio_val_input = QLineEdit()
+        self.init_portfolio_val_input.setPlaceholderText("₹1,00,000")
+        self.init_portfolio_val_input.setStyleSheet("color: black;")
+
+        init_portfolio_val_layout.addWidget(init_portfolio_val_title)
+        init_portfolio_val_layout.addWidget(self.init_portfolio_val_input)
+
+        layout.addLayout(init_portfolio_val_layout)
+        
+        cur_portfolio_val_layout = QHBoxLayout()
+
+        cur_portfolio_val_title = QLabel("ENTER CURRENT PORTFOLIO VALUE")
+        cur_portfolio_val_title.setStyleSheet("""
+            font-size: 14px;
+            font-weight: bold;
+            color: black;
+            padding: 5px;
+        """)
+
+        self.cur_portfolio_val_input = QLineEdit()
+        self.cur_portfolio_val_input.setPlaceholderText("₹1,00,000")
+        self.cur_portfolio_val_input.setStyleSheet("color: black;")
+
+        cur_portfolio_val_layout.addWidget(cur_portfolio_val_title)
+        cur_portfolio_val_layout.addWidget(self.cur_portfolio_val_input)
+
+        layout.addLayout(cur_portfolio_val_layout)
+        
+        gen_xirr_btn = QPushButton("GENERATE XIRR")
+        gen_xirr_btn.setStyleSheet("""
+            background-color: black;
+            color: white;
+            font-weight: bold;
+            padding: 3px 10px;
+            border-radius: 5px;                           
+        """)
+        gen_xirr_btn.clicked.connect(self.gen_xirr)
+        layout.addWidget(gen_xirr_btn)
+        
+        gen_tracker_btn = QPushButton("GENERATE RETURN TRACKER SHEET")
+        gen_tracker_btn.setStyleSheet("""
+            background-color: black;
+            color: white;
+            font-weight: bold;
+            padding: 3px 10px;
+            border-radius: 5px;
+        """)
+        gen_tracker_btn.clicked.connect(self.generate_excel)
+        layout.addWidget(gen_tracker_btn)
+        
+        generate_report_btn = QPushButton("GENERATE CLIENT PORTFOLIO REPORT")
+        generate_report_btn.setStyleSheet("""
+            background-color: black;
+            color: white;
+            font-weight: bold;
+            padding: 3px 10px;
+            border-radius: 5px;
+        """)
+        generate_report_btn.clicked.connect(self.generate_report)
+        layout.addWidget(generate_report_btn)
         
         self.sum_lbl = QLabel("Summary: No processing yet.")
         self.sum_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -741,80 +672,55 @@ class Main(QMainWindow):
             QMessageBox.critical(self, "Critical Error", err_msg)
     
     def process_mf_trans(self):
-        if not self.use_date_range.isChecked():
-            QMessageBox.warning(self, "Date Range Required", 
-                              "Please select the 'Use Date Range' checkbox and ensure dates are set before processing MF transactions.")
-            return
-
         missing_files = []
+    
         if "MF Transactions" not in self.required_files or self.required_files["MF Transactions"] is None:
             missing_files.append("MF Transactions")
+    
         if "SIP" not in self.required_files or self.required_files["SIP"] is None:
             missing_files.append("SIP")
+    
         if missing_files:
-            QMessageBox.warning(self, "Missing Files",
-                f"Please upload the following required files: {', '.join(missing_files)}")
+            QMessageBox.warning(self, "Missing Files", 
+                            f"Please upload the following required files: {', '.join(missing_files)}")
             return
     
-        from_date = self.from_date.date().toString("dd/MM/yyyy")
-        to_date = self.to_date.date().toString("dd/MM/yyyy")
-        date_range_info = f" with date range: {from_date} to {to_date}"
-        self.log(f"Using date range: {from_date} to {to_date}")
+        folder = QFileDialog.getExistingDirectory(self, "Select MF transactions folder", self.dl_folder)
     
-        if hasattr(self, 'codes') and hasattr(self, 'scraper') and self.scraper:
-            self.sum_lbl.setText("Processing MF transactions online...")
-        
-            def update_mf_progress(success, total, fails):
-                self.sum_lbl.setText(f"MF Trans Progress: {success}/{total} Complete, {len(fails)} Failed")
-        
-            try:
-                success, fails = self.scraper.process_all_clients_mf_trans(
-                    self.codes, 
-                    update_cb=update_mf_progress,
-                    from_date=from_date,
-                    to_date=to_date
-                )
-            
-                self.sum_lbl.setText(f"MF Trans Summary: {success}/{len(self.codes)} Complete, {len(fails)} Failed")
-            
-                folder = self.mf_folder  
-                self.log(f"Processing downloaded MF transactions from: {folder}")
-                self._process_local_mf_files(folder, date_range_info)
-            
-            except Exception as e:
-                import traceback
-                error_details = traceback.format_exc()
-                print(f"Processing error: {error_details}")
-                err_msg = f"Error downloading MF transactions: {str(e)}"
-                self.log(err_msg)
-                QMessageBox.critical(self, "Critical Error", err_msg)
-        
-        else:
-            folder = QFileDialog.getExistingDirectory(self, "Select MF transactions folder", self.dl_folder)
-            if not folder:
-                QMessageBox.warning(self, "Error", "No folder selected.")
-                return
-            self.log(f"Processing MF transactions from: {folder}")
-            self._process_local_mf_files(folder, date_range_info)
+        if not folder:
+            QMessageBox.warning(self, "Error", "No folder selected.")
+            return
 
-    def _process_local_mf_files(self, folder, date_range_info):
+        self.log(f"Processing MF transactions from: {folder}")
+
         try:
+            date_range_info = ""
+            if hasattr(self, 'use_date_range') and self.use_date_range.isChecked():
+                from_date = self.from_date.date().toString("dd/MM/yyyy")
+                to_date = self.to_date.date().toString("dd/MM/yyyy")
+                date_range_info = f" with date range: {from_date} to {to_date}"
+                self.log(f"Using date range: {from_date} to {to_date}")
+
             self.processor = Processor(folder)
+        
             if hasattr(self.processor, 'set_required_files'):
                 self.processor.set_required_files(
                     ledger=self.required_files.get("Ledger"),
                     mf_transactions=self.required_files["MF Transactions"],
                     sip=self.required_files["SIP"]
                 )
+        
             out_file = self.processor.run_mf_transactions()
+
             if out_file:
                 df = pd.read_excel(out_file)
                 count = df.shape[0]
+
                 self.sum_lbl.setText(
                     f"Processed MF transactions{date_range_info} for {count} clients.\n"
                     f"Report saved: {out_file}"
                 )
-                QMessageBox.information(self, "Success",
+                QMessageBox.information(self, "Success", 
                     f"MF transactions processing completed{date_range_info}!\n\n"
                     f"Clients processed: {count}\n"
                     f"Report saved: {out_file}")
@@ -1027,6 +933,71 @@ class Main(QMainWindow):
             error_details = traceback.format_exc()
             print(f"Excel generation error: {error_details}")
             QMessageBox.critical(self, "Error", f"Failed to generate Excel files: {str(e)}")
+     
+    def gen_xirr(self):
+        client_code = self.xirr_code_input.text().strip()
+    
+        try:
+            init_val_text = self.init_portfolio_val_input.text().strip()
+            init_val_text = init_val_text.replace('₹', '').replace(',', '')
+            initial_value = float(init_val_text) if init_val_text else 100000
+    
+        except ValueError:
+            print("Invalid initial portfolio value. Using default of 100000.")
+            initial_value = 100000
+    
+        try:
+            curr_val_text = self.cur_portfolio_val_input.text().strip()
+            curr_val_text = curr_val_text.replace('₹', '').replace(',', '')
+            current_value = float(curr_val_text) if curr_val_text else initial_value
+    
+        except ValueError:
+            print("Invalid current portfolio value. Using same as initial value.")
+            current_value = initial_value
+    
+        q_date = self.start_date.date()
+        start_date = date(q_date.year(), q_date.month(), q_date.day())
+    
+        print("\nProcessing with the following parameters:")
+        print(f"Client Code: {client_code if client_code else 'All clients'}")
+        print(f"Initial Value: {initial_value}")
+        print(f"Current Value: {current_value}")
+        print(f"Start Date: {start_date.strftime('%d/%m/%Y')}")
+    
+        processing_msg = QMessageBox()
+        processing_msg.setWindowTitle("Processing")
+        processing_msg.setText("Generating XIRR calculation...")
+        processing_msg.setStandardButtons(QMessageBox.NoButton)
+        processing_msg.show()
+    
+        try:
+            if client_code:
+                result = proc(cl_code=client_code, init_val=initial_value, curr_val=current_value, start_date=start_date)
+                processing_msg.close()
+            
+                if result:
+                    QMessageBox.information(self, "Success", f"XIRR calculation complete.\nResults saved to: {result}")
+                else:
+                    QMessageBox.warning(self, "Error", "Failed to generate XIRR. Please check the files and inputs.")
+            else:
+                results = proc(init_val=initial_value, curr_val=current_value, start_date=start_date)
+                processing_msg.close()
+            
+                if results:
+                    success_text = "XIRR calculations complete. Results saved to:\n"
+                    for res in results:
+                        success_text += f"  - {res}\n"
+                    QMessageBox.information(self, "Success", success_text)
+                else:
+                    QMessageBox.warning(self, "Error", "Failed to generate XIRR. Please check the files and inputs.")
+        
+            return result if client_code else results
+        except Exception as e:
+            processing_msg.close()
+            error_message = f"Error generating XIRR: {e}"
+            print(error_message)
+            QMessageBox.critical(self, "Error", error_message)
+            return None
      
     def closeEvent(self, event):
         if self.scraper:

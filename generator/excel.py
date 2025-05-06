@@ -400,20 +400,20 @@ def excel_generator(df):
     first_data_row = row - len(etf_equity)
     last_data_row = row - 1
 
-    market_value_col_letter = get_column_letter(5)
+    market_value_col_letter = get_column_letter(6)
     if first_data_row <= last_data_row:
         cell_references = [f"{market_value_col_letter}{r}" for r in range(first_data_row, last_data_row + 1)]
         formula = "=" + "+".join(cell_references)
     else:
         formula = "=0"
 
-    ws.cell(row=row, column=5, value=formula)
-    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=5).border = thin_border
-    ws.cell(row=row, column=5).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
-    ws.cell(row=row, column=5).number_format = '#,##,##0'
+    ws.cell(row=row, column=6, value=formula)
+    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=6).border = thin_border
+    ws.cell(row=row, column=6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=6).number_format = '#,##,##0'
 
-    pnl_col_letter = get_column_letter(6)
+    pnl_col_letter = get_column_letter(5)
     if first_data_row <= last_data_row:
         cell_references = [f"{pnl_col_letter}{r}" for r in range(first_data_row, last_data_row + 1)]
         formula = "=" + "+".join(cell_references)
@@ -423,11 +423,11 @@ def excel_generator(df):
     etf_equity_total_row = row
     market_value_total_rows['etf_equity'] = (6, row)
     
-    ws.cell(row=row, column=6, value=formula)
-    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=6).border = thin_border
-    ws.cell(row=row, column=6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
-    ws.cell(row=row, column=6).number_format = '#,##,##0'
+    ws.cell(row=row, column=5, value=formula)
+    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=5).border = thin_border
+    ws.cell(row=row, column=5).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=5).number_format = '#,##,##0'
 
     ws.cell(row=row, column=alloc_col, value=f"={market_value_col_letter}{row}/B4*100")
     ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
@@ -488,8 +488,8 @@ def excel_generator(df):
         ws.cell(row=row, column=col_idx).border = thin_border
         ws.cell(row=row, column=col_idx).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
 
-    mf_market_value_col_letter = get_column_letter(5)
-    mf_pnl_col_letter = get_column_letter(6)
+    mf_market_value_col_letter = get_column_letter(6)
+    mf_pnl_col_letter = get_column_letter(5)
 
     first_data_row = row - len(equity_mf)
     last_data_row = row - 1
@@ -503,11 +503,11 @@ def excel_generator(df):
     equity_mf_total_row = row
     market_value_total_rows['equity_mf'] = (6, row)
     
-    ws.cell(row=row, column=5, value=market_value_formula)
-    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=5).border = thin_border
-    ws.cell(row=row, column=5).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
-    ws.cell(row=row, column=5).number_format = '#,##,##0'
+    ws.cell(row=row, column=6, value=market_value_formula)
+    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=6).border = thin_border
+    ws.cell(row=row, column=6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=6).number_format = '#,##,##0'
 
     if first_data_row <= last_data_row:
         pnl_cell_references = [f"{mf_pnl_col_letter}{r}" for r in range(first_data_row, last_data_row + 1)]
@@ -515,11 +515,11 @@ def excel_generator(df):
     else:
         pnl_formula = "=0"
 
-    ws.cell(row=row, column=6, value=pnl_formula)
-    ws.cell(row=row, column=6).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=6).border = thin_border
-    ws.cell(row=row, column=6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
-    ws.cell(row=row, column=6).number_format = '#,##,##0'
+    ws.cell(row=row, column=5, value=pnl_formula)
+    ws.cell(row=row, column=5).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=5).border = thin_border
+    ws.cell(row=row, column=5).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=5).number_format = '#,##,##0'
 
     ws.cell(row=row, column=alloc_col, value=f"={mf_market_value_col_letter}{row}/B4*100")
     ws.cell(row=row, column=alloc_col).alignment = Alignment(horizontal="center")
@@ -814,7 +814,6 @@ def excel_generator(df):
     portfolio_formula = "=" + "+".join(portfolio_formula_parts)
     
     ws.cell(row=4, column=2, value=portfolio_formula)
-    
     wb.formula_attributes = {'calculate': 'on_load'}
     
     output_filename = f"{client_code}_Portfolio.xlsx"
