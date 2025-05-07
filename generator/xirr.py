@@ -79,6 +79,14 @@ def get_all():
     print(f"Found {len(codes)} client codes: {codes}")
     return list(codes)
 
+def parse_float(value):
+    if isinstance(value, (int, float)):
+        return float(value)
+    elif isinstance(value, str):
+        return float(value.replace(',', ''))
+    else:
+        return 0.0
+
 def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=None):
     print("Ledger columns:", ldg.columns.tolist())
     print("MF Transaction columns:", mft.columns.tolist())
@@ -188,9 +196,9 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
                         try:
                             eff_date = pd.to_datetime(eff_date).date()
                         except:
-                            eff_date = today
+                            eff_date = today_date
                     
-                    bal = row[bal_col]
+                    bal = parse_float(row[bal_col])
                     
                     is_in = 'in' in vch_type.lower()
                     
@@ -265,10 +273,10 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
                                     try:
                                         tr_date = pd.to_datetime(tr_date).date()
                                     except:
-                                        tr_date = today
+                                        tr_date = today_date
                                         
                                     try:
-                                        tr_value = float(tr_value)
+                                        tr_value = parse_float(tr_value)
                                     except:
                                         tr_value = 0
                                         
@@ -311,9 +319,9 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
                             try:
                                 tr_date = pd.to_datetime(tr_date).date()
                             except:
-                                tr_date = today
+                                tr_date = today_date
                         
-                        tr_val = float(row[tr_val_col])
+                        tr_val = parse_float(row[tr_val_col])
                         
                         is_buy = 'buy' in tr_type.lower()
                         rem = 'MF BUY' if is_buy else 'MF SELL'
