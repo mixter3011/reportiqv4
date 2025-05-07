@@ -381,12 +381,16 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
             date_format = workbook.add_format({'num_format': 'dd/mm/yyyy'})
             worksheet.set_column('A:A', 12, date_format)
             
+            percent_format = workbook.add_format({'num_format': '0.00%'})
             
             second_last_row = row_count + 1  
             if second_last_row >= 2:  
                 xirr_formula = f'=XIRR(B2:B{second_last_row},A2:A{second_last_row})'
-                worksheet.write(row_count + 1, 0, 'XIRR Value')
-                worksheet.write_formula(row_count + 1, 1, xirr_formula)
+                
+                worksheet.write(row_count + 1, 0, 'XIRR Calculation')
+                worksheet.write(row_count + 1, 1, 'XIRR Value')
+                
+                worksheet.write_formula(row_count + 1, 2, xirr_formula, percent_format)
             
         print(f"Analysis saved to {out_file}")
         return out_file
