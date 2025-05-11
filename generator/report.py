@@ -262,7 +262,6 @@ def overview(direct_equity_market_value, etf_equity_market_value, debt_etf_marke
         ["Equity Allocation %:", f"{equity_allocation_percent:.2f}%"],
     ]
     
-    # Add XIRR if available
     if xirr_value is not None:
         cash_data.append(["XIRR:", f"{xirr_value:.2f}%"])
     

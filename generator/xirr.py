@@ -589,11 +589,7 @@ def proc(cl_code=None, init_val=100000, curr_val=None, start_date=None):
         
         return out_files
     
-if __name__ == "__main__":
-    print("XIRR Calculation Tool")
-    print("--------------------")
-    print("Checking required modules...")
-    
+if __name__ == "__main__":    
     modules_to_check = ['pandas', 'numpy', 'scipy', 'xlsxwriter']
     missing_modules = []
     
