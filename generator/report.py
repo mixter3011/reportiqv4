@@ -16,11 +16,11 @@ from matplotlib.table import Table as MplTable
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
-from reportlab.lib.colors import HexColor, white
+from reportlab.lib.colors import HexColor, white, black, grey
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageTemplate, Frame, Image, BaseDocTemplate, NextPageTemplate, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageTemplate, Frame, Image, BaseDocTemplate, NextPageTemplate, PageBreak, Flowable
 
 def background(canvas, doc):
     logo_path = "/Users/sen/Desktop/reportiqv4/logo.png"
@@ -28,11 +28,11 @@ def background(canvas, doc):
     logo_width = 1.5 * inch
     logo_height = 0.5 * inch
     footer_width = 5.2*inch
-    footer_height = 1*inch
+    footer_height = 0.3*inch
     x1 = doc.pagesize[0] - doc.rightMargin - logo_width + 0.9 * inch
     y1 = doc.pagesize[1] - doc.topMargin + 0.4 * inch
     x2 = doc.pagesize[0] - doc.rightMargin - footer_width + 1 * inch
-    y2 = doc.pagesize[1] - doc.topMargin - 8.5 * inch 
+    y2 = 0.4 * inch + footer_height + 10  
     
     x_left_text = x2 - 2.8 * inch  
     x_right_text = x2 - 3 * inch
@@ -131,36 +131,42 @@ def cover (code, name):
     return doc, content
 
 def overview(direct_equity_market_value, etf_equity_market_value, debt_etf_market_value, 
-             equity_mf_market_value, debt_mf_market_value, bond_market_value, df2):
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, Image
-    from reportlab.lib.units import inch
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.lib.colors import HexColor, black, white, grey
-    from datetime import datetime
-    import io
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
+             equity_mf_market_value, debt_mf_market_value, bond_market_value, df2, xirr_value=None):
+        
+    client_name = ""
+    client_code = ""
+    try:
+        for col in df2.columns:
+            if 'name' in col.lower():
+                client_name = df2[col].iloc[0]
+            if 'code' in col.lower() or 'id' in col.lower():
+                client_code = df2[col].iloc[0]
+    except (IndexError, ValueError, AttributeError):
+        pass
     
     available_cash = 0
     try:
-        if 'Balance' in df2.columns:
-            available_cash = float(df2['Balance'].iloc[0])
-        else:
-            for col in df2.columns:
-                if 'balance' in col.lower():
-                    available_cash = float(df2[col].iloc[0])
-                    break
-    except (IndexError, ValueError, AttributeError):
+        balance_col = None
+        for col in df2.columns:
+            if col.upper() == 'BALANCE':
+                balance_col = col
+                break
+                
+        if balance_col is not None and len(df2) > 0:
+            for value in df2[balance_col]:
+                if pd.notna(value) and str(value).strip():
+                    try:
+                        available_cash = float(str(value).replace(',', ''))
+                        break
+                    except (ValueError, TypeError):
+                        pass
+                        
+    except (IndexError, ValueError, AttributeError, KeyError) as e:
+        print(f"Error accessing balance: {e}")
         available_cash = 0
     
     equity_total = direct_equity_market_value + etf_equity_market_value + equity_mf_market_value
-    
-    gold_total = 0
     gold_total = bond_market_value
-    
     debt_total = debt_etf_market_value + debt_mf_market_value
     
     cash_equivalent = debt_total + gold_total + available_cash
@@ -179,98 +185,198 @@ def overview(direct_equity_market_value, etf_equity_market_value, debt_etf_marke
         fontSize=16,
         alignment=TA_CENTER,
         spaceAfter=6,
-        textColor=HexColor('#990000')
+        textColor=HexColor('#3C3EA8')
     )
-
-    sub = ParagraphStyle(
-        'NormalStyle',
+    
+    title_style = ParagraphStyle(
+        'TitleStyle',
         parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
+        fontName='Helvetica-Bold',
+        fontSize=12,
         alignment=TA_CENTER
     )
     
     content = []
     content.append(PageBreak()) 
-    content.append(Paragraph("Holding Summary & Performance", heading))
+    
+    class HorizontalLineFlowable(Flowable):
+        def __init__(self, width=10, height=3):
+            Flowable.__init__(self)
+            self.width = width
+            self.height = height
+            
+        def draw(self):
+            self.canv.setStrokeColor(HexColor('#3C3EA8'))
+            self.canv.setLineWidth(self.height)
+            self.canv.line(5, 0, self.width, 0)
+            
+    header_line = HorizontalLineFlowable(6*inch)  
+    
+    if client_name and client_code:
+        client_name_paragraph = Paragraph(f"{client_name}", heading)
+        client_code_paragraph = Paragraph(f"{client_code}", heading)
+        client_info = [[client_name_paragraph], [client_code_paragraph]]
+        client_table = Table(client_info, colWidths=[8*inch]) 
+        client_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        content.append(client_table)
+    else:
+        content.append(Paragraph("Holding Summary & Performance", heading))
+    
     content.append(Spacer(1, 0.1*inch))
-    content.append(Paragraph(f"For Period (As on {datetime.now().strftime('%d-%b-%Y')}).", sub))
-    content.append(Spacer(1, 0.2*inch))
+    content.append(header_line)
+    content.append(Spacer(1, 0.5*inch))
     
-    data = [
-        ["Asset Category", "Market Value (Rs.)", "Allocation (%)"],
-        ["Equity", f"{equity_total:,.2f}", f"{(equity_total/total_portfolio_value*100):,.2f}%" if total_portfolio_value > 0 else "0.00%"],
-        ["Debt", f"{debt_total:,.2f}", f"{(debt_total/total_portfolio_value*100):,.2f}%" if total_portfolio_value > 0 else "0.00%"],
-        ["Gold", f"{gold_total:,.2f}", f"{(gold_total/total_portfolio_value*100):,.2f}%" if total_portfolio_value > 0 else "0.00%"],
-        ["Available Cash", f"{available_cash:,.2f}", f"{(available_cash/total_portfolio_value*100):,.2f}%" if total_portfolio_value > 0 else "0.00%"],
-        ["Total", f"{total_portfolio_value:,.2f}", "100.00%"]
-    ]
+    composition_data = []
+    composition_data.append(["Portfolio Value", f"{total_portfolio_value:,.0f}"])
     
-    table_style = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#990000')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+    if equity_total > 0:
+        composition_data.append(["Equity", f"{equity_total:,.0f}"])
+    if debt_total > 0:
+        composition_data.append(["Debt", f"{debt_total:,.0f}"])
+    if gold_total > 0:
+        composition_data.append(["Gold", f"{gold_total:,.0f}"])
+    if available_cash > 0:
+        composition_data.append(["Available Cash", f"{available_cash:,.0f}"])
+    
+    composition_table = Table(composition_data, colWidths=[2*inch, 2*inch])
+    composition_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#D6E1E8')), 
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        ('BACKGROUND', (0, -1), (-1, -1), HexColor('#DDDDDD')),
-        ('GRID', (0, 0), (-1, -1), 1, grey),
+        ('FONTSIZE', (0, 1), (-1, 1), 14),
+        ('GRID', (0, 0), (-1, -1), 1, HexColor('#D6E1E8')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10)
-    ])
+        ('LEFTPADDING', (0, 0), (0, -1), 0.1*inch),
+        ('RIGHTPADDING', (1, 0), (1, -1), 0.1*inch),
+        ('FONTSIZE', (0, 0), (-1, -1), 14),
+        ('LINEBELOW', (0, 0), (-1, -1), 0.5, HexColor('#D6E1E8')),  
+    ]))
     
-    asset_table = Table(data, colWidths=[2.5*inch, 2*inch, 1.5*inch])
-    asset_table.setStyle(table_style)
-    content.append(asset_table)
-    content.append(Spacer(1, 0.3*inch))
-    
-    data2 = [
-        ["Cash Equivalent Value", f"{cash_equivalent:,.2f}"],
-        ["Cash Equivalent %", f"{cash_equivalent_percent:,.2f}%"],
-        ["Equity Allocation %", f"{equity_allocation_percent:,.2f}%"]
+    cash_data = [
+        ["Cash Equivalent:", f"{cash_equivalent:,.0f}"],
+        ["Cash Equivalent %:", f"{cash_equivalent_percent:.2f}%"],
+        ["Equity Allocation %:", f"{equity_allocation_percent:.2f}%"],
     ]
     
-    table_style2 = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#DDDDDD')),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('GRID', (0, 0), (-1, -1), 1, grey),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10)
-    ])
+    if xirr_value is not None:
+        cash_data.append(["XIRR:", f"{xirr_value:.2f}%"])
     
-    allocation_table = Table(data2, colWidths=[3*inch, 3*inch])
-    allocation_table.setStyle(table_style2)
-    content.append(allocation_table)
-    content.append(Spacer(1, 0.3*inch))
+    cash_table = Table(cash_data, colWidths=[2*inch, 2*inch])
+    cash_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (0, -1), 0.1*inch),
+        ('RIGHTPADDING', (1, 0), (1, -1), 0.1*inch),
+        ('FONTSIZE', (0, 0), (-1, -1), 14),
+    ]))
+    
+    left_data = [[composition_table], [Spacer(1, 0.5*inch)], [cash_table]]
+    left_col = Table(left_data, colWidths=[4*inch])
+    left_col.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (0, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (0, -1), 0),
+        ('RIGHTPADDING', (0, 0), (0, -1), 0),
+        ('TOPPADDING', (0, 0), (0, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (0, -1), 0),
+    ]))
+    
+    class VerticalLineFlowable(Flowable):
+        def __init__(self, height):
+            Flowable.__init__(self)
+            self.height = height
+            
+        def draw(self):
+            self.canv.setStrokeColor(HexColor('#000000'))
+            self.canv.line(15, 15, 15, self.height)
+    
+    divider = VerticalLineFlowable(3.3*inch)
+    
+    right_content = []
+    pie_title = Paragraph("Portfolio Composition", title_style)
+    right_content.append(pie_title)
     
     try:
-        labels = ['Equity', 'Debt', 'Gold', 'Cash']
-        sizes = [equity_total, debt_total, gold_total, available_cash]
-        # Filter out zero values
-        non_zero_indices = [i for i, size in enumerate(sizes) if size > 0]
-        filtered_labels = [labels[i] for i in non_zero_indices]
-        filtered_sizes = [sizes[i] for i in non_zero_indices]
+        labels = []
+        sizes = []
+        colors = []
         
-        if filtered_sizes:  
-            plt.figure(figsize=(6, 4))
-            colors = ['#FF9999', '#66B2FF', '#FFCC99', '#99FF99']
-            plt.pie(filtered_sizes, labels=filtered_labels, colors=colors, autopct='%1.1f%%', startangle=90)
-            plt.axis('equal')  
-            plt.title('Asset Allocation')
+        if equity_total > 0:
+            labels.append('Equity')
+            sizes.append(equity_total)
+            colors.append('#00FFFF')  
+        
+        if debt_total > 0:
+            labels.append('Debt')
+            sizes.append(debt_total)
+            colors.append('#90EE90')  
+        
+        if gold_total > 0:
+            labels.append('Gold')
+            sizes.append(gold_total)
+            colors.append('#FFCC99')  
+        
+        if available_cash > 0:
+            labels.append('Available Cash')
+            sizes.append(available_cash)
+            colors.append('#FFFFC5')  
+        
+        if sizes:  
+            plt.figure(figsize=(7, 6), facecolor='none')
+            
+            plt.pie(sizes, labels=None, colors=colors, 
+                   autopct='%1.0f%%', startangle=90,
+                   wedgeprops=dict(width=0.7, edgecolor='w'))
+            
+            center_circle = plt.Circle((0,0), 0.35, fc='#D6E1E8')
+            plt.gca().add_patch(center_circle)
+            
+            legend = plt.legend(labels, loc="center right", bbox_to_anchor=(1.2, 0.5))
+            
+            plt.axis('equal')
             
             buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+            plt.savefig(buf, format='png', dpi=300, bbox_inches='tight', transparent=True)
             buf.seek(0)
             
             img = Image(buf, width=4*inch, height=3*inch)
-            content.append(img)
+            right_content.append(img)
             plt.close()
+            
     except Exception as e:
         error_style = ParagraphStyle('ErrorStyle', parent=styles['Normal'], textColor=HexColor('#990000'))
-        content.append(Paragraph(f"Unable to generate pie chart: {str(e)}", error_style))
+        right_content.append(Paragraph(f"Unable to generate pie chart: {str(e)}", error_style))
+    
+    right_col = []
+    for item in right_content:
+        right_col.append([item])
+    
+    right_table = Table(right_col, colWidths=[4*inch])
+    right_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (0, -1), 'TOP'),
+    ]))
+    
+    main_table_data = [[left_col, divider, right_table]]
+    main_table = Table(main_table_data, colWidths=[4*inch, 0.1*inch, 4*inch])
+    main_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0.2*inch),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0.2*inch),
+    ]))
+    
+    centered_table = Table([[main_table]], colWidths=[8.2*inch])  
+    centered_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    
+    content.append(centered_table)
     
     return content
 
@@ -619,7 +725,7 @@ def deb(debt_etf, debt_etf_total, debt_mf, debt_mf_total, bond_data, bond_total)
     
     return page_elements
 
-def report_gen (df1, df2):
+def report_gen(df1, df2, df3=None, output_path=None):
     info_row = df1[df1['Unnamed: 0'] == 'Client Equity Code/UCID/Name'].index[0]
     c_info = str(df1.iloc[info_row, 1]).strip()
     parts = c_info.split('/')
@@ -697,29 +803,35 @@ def report_gen (df1, df2):
     debt_mf_market_value = debt_mf_total[4] if len(debt_mf_total) > 4 and debt_mf_total[4] != '' else 0
     bond_market_value = bond_total[4] if len(bond_total) > 4 and bond_total[4] != '' else 0
     
-    total_portfolio_value = (
-        direct_equity_market_value + 
-        etf_equity_market_value + 
-        debt_etf_market_value + 
-        equity_mf_market_value + 
-        debt_mf_market_value + 
-        bond_market_value
-    )
+    try:
+        df2['client_name'] = c_name
+        df2['client_code'] = c_code
+    except Exception:
+        pass
     
-    if total_portfolio_value > 0:
-        direct_equity_percent = (direct_equity_market_value / total_portfolio_value) * 100
-        etf_equity_percent = (etf_equity_market_value / total_portfolio_value) * 100
-        debt_etf_percent = (debt_etf_market_value / total_portfolio_value) * 100
-        equity_mf_percent = (equity_mf_market_value / total_portfolio_value) * 100
-        debt_mf_percent = (debt_mf_market_value / total_portfolio_value) * 100
-        bond_percent = (bond_market_value / total_portfolio_value) * 100
-    else:
-        direct_equity_percent = etf_equity_percent = debt_etf_percent = equity_mf_percent = debt_mf_percent = bond_percent = 0
+    xirr_value = None
+    if df3 is not None and not df3.empty:
+        try:
+            last_row = df3.iloc[-1]
+            xirr_value = last_row.iloc[2] * 100  
+        except (IndexError, ValueError, TypeError, AttributeError) as e:
+            print(f"Error extracting XIRR value: {str(e)}")
     
-    doc , cover_page = cover(c_code, c_name)
-    overview_page = overview(direct_equity_market_value, etf_equity_market_value, debt_etf_market_value, equity_mf_market_value, debt_mf_market_value, bond_market_value, df2)
-    direct_equity_page =  deq(direct_equity, direct_equity_total, etf_equity, etf_equity_total, equity_mf, equity_mf_total)
+    if output_path is None:
+        output_path = f"{c_name}.pdf"
+    
+    doc, cover_page = cover(c_code, c_name)
+    overview_page = overview(direct_equity_market_value, etf_equity_market_value, debt_etf_market_value, 
+                            equity_mf_market_value, debt_mf_market_value, bond_market_value, df2, xirr_value)
+    direct_equity_page = deq(direct_equity, direct_equity_total, etf_equity, etf_equity_total, equity_mf, equity_mf_total)
     debt_page = deb(debt_etf, debt_etf_total, debt_mf, debt_mf_total, bond_data, bond_total)
-    pdf = cover_page + overview_page + direct_equity_page + debt_page
+    pdf_content = cover_page + overview_page + direct_equity_page + debt_page
     
-    doc.build(pdf)
+    doc = BaseDocTemplate(output_path, pagesize=letter)
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height + 0.8*inch)
+    page = PageTemplate(id='FirstPage', frames=frame, onPage=background)
+    doc.addPageTemplates([page])
+    
+    doc.build(pdf_content)
+    
+    return output_path

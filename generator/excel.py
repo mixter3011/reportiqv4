@@ -5,7 +5,28 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.formula.translate import Translator
 
-def excel_generator(df):
+def excel_generator(df, df2):    
+    available_cash = 0
+    try:
+        balance_col = None
+        for col in df2.columns:
+            if col.upper() == 'BALANCE':
+                balance_col = col
+                break
+                
+        if balance_col is not None and len(df2) > 0:
+            for value in df2[balance_col]:
+                if pd.notna(value) and str(value).strip():
+                    try:
+                        available_cash = float(str(value).replace(',', ''))
+                        break
+                    except (ValueError, TypeError):
+                        pass
+                        
+    except (IndexError, ValueError, AttributeError, KeyError) as e:
+        print(f"Error accessing balance: {e}")
+        available_cash = 0
+        
     client_info_row = df[df['Unnamed: 0'] == 'Client Equity Code/UCID/Name'].index[0]
     client_info = str(df.iloc[client_info_row, 1]).strip()
     parts = client_info.split('/')
@@ -210,6 +231,7 @@ def excel_generator(df):
 
     row_portfolio = row - 1  
     row_cash = row_portfolio + 1
+    row_total = row_cash + 1
     
     ws.merge_cells(f'A{row_portfolio}')
     ws.cell(row=row_portfolio, column=1, value="Portfolio Value").font = Font(bold=True)
@@ -233,6 +255,19 @@ def excel_generator(df):
     ws.cell(row=row_cash, column=2).border = thin_border
     ws.cell(row=row_cash, column=2).alignment = Alignment(horizontal="center")
     ws.cell(row=row_cash, column=2).number_format = '#,##,##0'
+    
+    ws.merge_cells(f'A{row_total}')
+    ws.cell(row=row_total, column=1, value="Total Portfolio Value").font = Font(bold=True)
+    ws.cell(row=row_total, column=1).border = thin_border
+    ws.cell(row=row_total, column=1).alignment = Alignment(horizontal="left")
+    ws.cell(row=row_total, column=1).fill = portfolio_value_fill
+    
+    ws.merge_cells(f'B{row_total}')
+    ws.cell(row=row_total, column=2).border = thin_border
+    ws.cell(row=row_total, column=2).alignment = Alignment(horizontal="center")
+    ws.cell(row=row_total, column=2).font = Font(bold=True)
+    ws.cell(row=row_total, column=2).number_format = '#,##,##0'
+    ws.cell(row=row_total, column=2).fill = portfolio_value_fill
     
     ws.row_dimensions[row_cash].height = 12
     
@@ -809,11 +844,24 @@ def excel_generator(df):
         col_letter = get_column_letter(col)
         portfolio_formula_parts.append(f"{col_letter}{row_num}")
 
-    portfolio_formula_parts.append(f"B{row_cash}")  
-
+    portfolio_formula_parts.append(f"B{row_cash}")
+    
     portfolio_formula = "=" + "+".join(portfolio_formula_parts)
     
     ws.cell(row=4, column=2, value=portfolio_formula)
+    
+    total_portfolio_formula = f"=B{row_portfolio}+{available_cash}"
+    
+    ws.cell(row=row_total, column=2, value=total_portfolio_formula)
+    
+    ws.cell(row=row_cash, column=2, value=0)
+    
+    for asset_type, (col, row_num) in market_value_total_rows.items():
+        col_letter = get_column_letter(col)
+        alloc_col = 7 if col < 9 else 16  
+        alloc_formula = f"={col_letter}{row_num}/B{row_total}*100"
+        ws.cell(row=row_num, column=alloc_col).value = alloc_formula
+        
     wb.formula_attributes = {'calculate': 'on_load'}
     
     output_filename = f"{client_code}_Portfolio.xlsx"

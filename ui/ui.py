@@ -3,6 +3,8 @@ import glob
 import time
 from datetime import date
 import pandas as pd
+import traceback
+import shutil
 from generator.excel import excel_generator
 from generator.report import report_gen
 from generator.xirr import proc
@@ -200,7 +202,7 @@ class Main(QMainWindow):
         self.excel_btn.setEnabled(False)
         layout.addWidget(self.excel_btn)
         
-        mf_date_title = QLabel("DATE RANGE")
+        mf_date_title = QLabel("DATE RANGE FOR MF TRANSACTIONS")
         mf_date_title.setStyleSheet("""
             font-size: 14px;
             font-weight: bold;
@@ -738,41 +740,51 @@ class Main(QMainWindow):
     def generate_report(self):
         try:
             self.log("Generating report...")
-        
+
             desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
             holding_folder = os.path.join(desktop, "Holding")
             ledger_folder = os.path.join(desktop, "Ledger")
             client_reports_folder = os.path.join(desktop, "client_reports")
-        
-            for folder in [holding_folder, ledger_folder, client_reports_folder]:
+            client_xirr_folder = os.path.join(desktop, "xirr_reports")
+
+            for folder in [holding_folder, ledger_folder, client_reports_folder, client_xirr_folder]:
                 if not os.path.exists(folder):
                     os.makedirs(folder)
-        
+
             holding_csv_files = [f for f in os.listdir(holding_folder) if f.endswith('.csv')]
-        
+
             if not holding_csv_files:
                 QMessageBox.warning(self, "Error", "No CSV files found in Holding folder.")
                 return
-        
+
             processed_count = 0
             skipped_count = 0
-            
+
             for holding_csv in holding_csv_files:
                 try:
                     base_filename = os.path.splitext(holding_csv)[0]
-                
-                    ledger_file = None
-                    for ext in ['.csv', '.xlsx', '.xls']:
-                        potential_file = os.path.join(ledger_folder, base_filename + ext)
-                        if os.path.exists(potential_file):
-                            ledger_file = potential_file
-                            break
-                
-                    if not ledger_file:
+
+                    ledger_file = os.path.join(ledger_folder, f"{base_filename}_Ledger.csv")
+    
+                    if not os.path.exists(ledger_file):
+                        for ext in ['.csv', '.xlsx', '.xls']:
+                            potential_file = os.path.join(ledger_folder, f"{base_filename}_Ledger{ext}")
+                            if os.path.exists(potential_file):
+                                ledger_file = potential_file
+                                break
+        
+                        if not os.path.exists(ledger_file):
+                            for ext in ['.csv', '.xlsx', '.xls']:
+                                potential_file = os.path.join(ledger_folder, base_filename + ext)
+                                if os.path.exists(potential_file):
+                                    ledger_file = potential_file
+                                    break
+
+                    if not os.path.exists(ledger_file):
                         self.log(f"Skipped {holding_csv}: No matching file in Ledger folder")
                         skipped_count += 1
                         continue
-                
+
                     if not ledger_file.endswith('.csv'):
                         try:
                             try:
@@ -782,55 +794,73 @@ class Main(QMainWindow):
                                     ledger_df = pd.read_excel(ledger_file, engine='openpyxl')
                                 except Exception as e2:
                                     ledger_df = pd.read_excel(ledger_file, engine='xlrd')
-                        
-                            ledger_csv_file = os.path.join(ledger_folder, base_filename + '.csv')
+        
+                            ledger_csv_file = os.path.join(ledger_folder, f"{base_filename}_Ledger.csv")
                             ledger_df.to_csv(ledger_csv_file, index=False)
                             ledger_file = ledger_csv_file
-                        
+        
                         except Exception as e:
                             self.log(f"Failed to convert {ledger_file} to CSV: {str(e)}")
                             skipped_count += 1
                             continue
-                
+
                     holding_df = pd.read_csv(os.path.join(holding_folder, holding_csv))
                     ledger_df = pd.read_csv(ledger_file)
+        
+                    xirr_df = None
+                    try:
+                        info_row = holding_df[holding_df['Unnamed: 0'] == 'Client Equity Code/UCID/Name'].index[0]
+                        c_info = str(holding_df.iloc[info_row, 1]).strip()
+                        client_code = c_info.split('/')[0].strip()
+            
+                        xirr_files = [f for f in os.listdir(client_xirr_folder) if f.endswith(('.csv', '.xlsx', '.xls'))]
+                        xirr_file = None
+            
+                        for file in xirr_files:
+                            if client_code in file:
+                                xirr_file = os.path.join(client_xirr_folder, file)
+                                break
+            
+                        if xirr_file:
+                            if xirr_file.endswith('.csv'):
+                                xirr_df = pd.read_csv(xirr_file)
+                            else:
+                                try:
+                                    xirr_df = pd.read_excel(xirr_file)
+                                except Exception as e1:
+                                    try:
+                                        xirr_df = pd.read_excel(xirr_file, engine='openpyxl')
+                                    except Exception as e2:
+                                        xirr_df = pd.read_excel(xirr_file, engine='xlrd')
                 
-                    report_content = report_gen(holding_df, ledger_df)
+                            self.log(f"Found XIRR file for {client_code}: {os.path.basename(xirr_file)}")
+                        else:
+                            self.log(f"No XIRR file found for client code: {client_code}")
                 
+                    except Exception as e:
+                        self.log(f"Error processing XIRR for {holding_csv}: {str(e)}")
+
                     output_file = os.path.join(client_reports_folder, f"{base_filename}_report.pdf")
                 
-                    if isinstance(report_content, pd.DataFrame):
-                        temp_excel = os.path.join(client_reports_folder, f"{base_filename}_temp.xlsx")
-                        report_content.to_excel(temp_excel, index=False)
+                    try:
+                        pdf_path = report_gen(holding_df, ledger_df, xirr_df, output_path=output_file)
                     
-                        output_file = os.path.join(client_reports_folder, f"{base_filename}_report.xlsx")
-                        import shutil
-                        shutil.move(temp_excel, output_file)
+                        generated_path = os.path.abspath(pdf_path)
                     
-                    elif isinstance(report_content, str) and os.path.exists(report_content):
-                        import shutil
-                        extension = os.path.splitext(report_content)[1]
-                        output_file = os.path.join(client_reports_folder, f"{base_filename}_report{extension}")
-                        shutil.copy2(report_content, output_file)
-                
-                    else:
-                        with open(output_file, 'wb') as f:
-                            if isinstance(report_content, bytes):
-                                f.write(report_content)
-                            else:
-                                f.write(str(report_content).encode('utf-8'))
-                
-                    if os.path.exists(output_file):
-                        processed_count += 1
-                        self.log(f"Generated report for {base_filename}")
-                    else:
-                        self.log(f"Failed to generate report for {base_filename}")
+                        if os.path.exists(generated_path) and os.path.getsize(generated_path) > 0:
+                            processed_count += 1
+                            self.log(f"Generated report for {base_filename} at {generated_path}")
+                        else:
+                            self.log(f"Failed to generate report for {base_filename} or file is empty. Expected at: {generated_path}")
+                            skipped_count += 1
+                    except Exception as e:
+                        self.log(f"Error in report_gen for {base_filename}: {str(e)}")
                         skipped_count += 1
-                
+
                 except Exception as e:
                     self.log(f"Error processing {holding_csv}: {str(e)}")
                     skipped_count += 1
-        
+
             if processed_count > 0:
                 self.sum_lbl.setText(
                     f"Generated {processed_count} client reports.\n"
@@ -845,91 +875,110 @@ class Main(QMainWindow):
             else:
                 self.log("Failed to generate any client reports")
                 QMessageBox.warning(self, "Error", "Failed to generate any client reports")
-        
+
         except Exception as e:
-            import traceback
             error_details = traceback.format_exc()
             print(f"Report generation error: {error_details}")
+            self.log(f"Report generation error: {str(e)}")
             QMessageBox.critical(self, "Error", f"Failed to generate reports: {str(e)}")
 
     def generate_excel(self):
         try:
             self.log("Generating Excel files from CSV files...")
             folder = self.dl_folder  
+            ledger_folder = os.path.join(os.path.dirname(folder), "Ledger")  
+        
             desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
             excel_reports_folder = os.path.join(desktop, "excel_reports")
             if not os.path.exists(excel_reports_folder):
                 os.makedirs(excel_reports_folder)
-        
-            csv_files = [os.path.join(folder, f) for f in os.listdir(folder) 
+    
+            holdings_files = [os.path.join(folder, f) for f in os.listdir(folder) 
                         if f.endswith('.csv')]
-        
-            if not csv_files:
+    
+            if not holdings_files:
                 self.log("No CSV files found in Holdings folder.")
                 QMessageBox.warning(self, "Error", "No CSV files found in Holdings folder.")
                 return
-        
+            
+            ledger_files = {}
+            if os.path.exists(ledger_folder):
+                for f in os.listdir(ledger_folder):
+                    if f.endswith('_Ledger.csv'):
+                        client_code = f.replace('_Ledger.csv', '')
+                        ledger_files[client_code] = os.path.join(ledger_folder, f)
+            else:
+                self.log("Ledger folder not found. Only Holdings data will be processed.")
+    
             processed_count = 0
-            for csv_file in csv_files:
+            for holdings_csv in holdings_files:
                 try:
-                    df = pd.read_csv(csv_file)
-                    if df.empty:
-                        print(f"Skipping empty file: {csv_file}")
+                    base_filename = os.path.splitext(os.path.basename(holdings_csv))[0]
+                    client_code = base_filename  
+                
+                    df_holdings = pd.read_csv(holdings_csv)
+                    if df_holdings.empty:
+                        print(f"Skipping empty holdings file: {holdings_csv}")
                         continue
                 
-                    base_filename = os.path.splitext(os.path.basename(csv_file))[0]
-                    
-                    output_file = excel_generator(df)
+                    df_ledger = None
+                    if client_code in ledger_files:
+                        ledger_csv = ledger_files[client_code]
+                        try:
+                            df_ledger = pd.read_csv(ledger_csv)
+                            print(f"Found matching ledger file for {client_code}: {ledger_csv}")
+                        except Exception as le:
+                            print(f"Error reading ledger file {ledger_csv}: {str(le)}")
+                    else:
+                        print(f"No matching ledger file found for client code: {client_code}")
                 
+                    output_file = excel_generator(df_holdings, df_ledger)  
+            
                     if output_file:
                         if os.path.exists(output_file):
                             dest_file = os.path.join(excel_reports_folder, f"{base_filename}_report.xlsx")
-                            import shutil
-                            shutil.copy2(output_file, dest_file)
+                            shutil.move(output_file, dest_file)
                             processed_count += 1
-                            print(f"Processed: {csv_file} → {dest_file}")
                         else:
                             print(f"Output file not found: {output_file}")
                     else:
                         try:
-                            potential_dirs = [os.getcwd(), os.path.dirname(csv_file), desktop]
+                            potential_dirs = [os.getcwd(), os.path.dirname(holdings_csv), desktop]
                             newest_file = None
                             newest_time = 0
                             for check_dir in potential_dirs:
                                 excel_files = glob.glob(os.path.join(check_dir, "*.xlsx"))
                                 for file in excel_files:
                                     file_time = os.path.getmtime(file)
-                                
+                            
                                     if time.time() - file_time < 10 and file_time > newest_time:  
                                         newest_file = file
                                         newest_time = file_time
-                        
+                    
                             if newest_file:
                                 dest_file = os.path.join(excel_reports_folder, f"{base_filename}_report.xlsx")
-                                import shutil
                                 shutil.copy2(newest_file, dest_file)
                                 processed_count += 1
-                                print(f"Processed: {csv_file} → {dest_file} (found recent file)")
+                                print(f"Processed: {holdings_csv} → {dest_file} (found recent file)")
                             else:
-                                print(f"Could not locate output file for {csv_file}")
+                                print(f"Could not locate output file for {holdings_csv}")
                         except Exception as inner_e:
-                            print(f"Error locating output for {csv_file}: {str(inner_e)}")
-                    
+                            print(f"Error locating output for {holdings_csv}: {str(inner_e)}")
+                
                 except Exception as e:
-                    print(f"Error processing {csv_file}: {str(e)}")
-        
+                    print(f"Error processing {holdings_csv}: {str(e)}")
+    
             if processed_count > 0:
-                self.log(f"Generated {processed_count}/{len(csv_files)} Excel reports in {excel_reports_folder}")
+                self.log(f"Generated {processed_count}/{len(holdings_files)} Excel reports in {excel_reports_folder}")
                 QMessageBox.information(self, "Success", 
                     f"Excel reports successfully generated!\n\n"
-                    f"Files processed: {processed_count}/{len(csv_files)}\n"
+                    f"Files processed: {processed_count}/{len(holdings_files)}\n"
                     f"Reports location: {excel_reports_folder}")
             else:
                 self.log("Failed to generate any Excel reports")
                 QMessageBox.warning(self, "Error", "Failed to generate any Excel reports")
-        
+    
         except Exception as e:
-            import traceback
             error_details = traceback.format_exc()
             print(f"Excel generation error: {error_details}")
             QMessageBox.critical(self, "Error", f"Failed to generate Excel files: {str(e)}")
