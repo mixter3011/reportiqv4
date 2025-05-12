@@ -4,7 +4,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
+from selenium.common.exceptions import TimeoutException
 class Scraper:
     def __init__(self, dl_folder, mf_folder):
         self.driver = None
@@ -91,118 +91,106 @@ class Scraper:
 
     def search_client(self, code):
         self.log(f"🔎 Processing client: {code}")
-        wait = WebDriverWait(self.driver, 15)  
+        wait = WebDriverWait(self.driver, 15)
         retry_count = 0
         max_retries = 2
 
         while retry_count <= max_retries:
             try:
-                
                 initial_tabs = self.driver.window_handles
                 if len(initial_tabs) > 1:
                     self.driver.switch_to.window(initial_tabs[1])
-            
-                
-                search_box = wait.until(EC.presence_of_element_located((By.ID, "UCBanner_txtSearch")))
+
+                search_box = wait.until(EC.presence_of_element_located((By.ID, "b2-Input_Search")))
                 search_box.clear()
                 search_box.send_keys(code)
                 self.log(f"⌨️ Entering client code: {code}")
-            
-                
-                time.sleep(2)
-            
-                
+
                 try:
-                    suggestions = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "ui-menu-item")))
-                    first_suggestion = self.driver.find_element(By.CLASS_NAME, "ui-menu-item")
+                    suggestions_container = wait.until(
+                        EC.visibility_of_element_located(
+                            (By.CSS_SELECTOR, ".reactive-autocomplete-list-container")
+                        )
+                    )
+                    first_suggestion = suggestions_container.find_element(
+                        By.CSS_SELECTOR, "div:first-child"  
+                    )
                     first_suggestion.click()
+                    self.log("✅ Selected first autocomplete suggestion")
+                
                 except Exception as e:
-                    self.log(f"⚠️ No suggestions found for {code}, retrying...")
+                    self.log(f"⚠️ No suggestions found for {code}: {str(e)}, retrying...")
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
                     continue
 
-                
-                time.sleep(5)
-                new_tabs = self.driver.window_handles
-            
-                if len(new_tabs) > len(initial_tabs):
+                try:
+                    wait.until(lambda d: len(d.window_handles) > len(initial_tabs))
+                    new_tabs = self.driver.window_handles
                     client_profile_tab = new_tabs[-1]
                     self.driver.switch_to.window(client_profile_tab)
-                    self.log("🆕 Switched to the Client Profile tab.")
-
-                    
-                    try:
-                        capital_gain_btn = wait.until(EC.element_to_be_clickable(
-                            (By.XPATH, "//a[contains(text(),'Capital Gain Report')]")))
-                        capital_gain_btn.click()
-                    except Exception as e:
-                        self.log(f"⚠️ Could not find Capital Gain Report button: {str(e)}")
-                        
-                        self.driver.close()
-                        self.driver.switch_to.window(initial_tabs[1])
-                        retry_count += 1
-                        if retry_count > max_retries:
-                            return False
-                        continue
-
-                    
-                    time.sleep(5)
-                    dashboard_tabs = self.driver.window_handles
-                
-                    if len(dashboard_tabs) > len(new_tabs):
-                        client_dashboard_tab = dashboard_tabs[-1]
-                        self.driver.switch_to.window(client_dashboard_tab)
-                        self.log("📊 Switched to the Client Dashboard tab.")
-
-                        
-                        self.driver.switch_to.window(client_profile_tab)
-                        self.driver.close()
-                        self.log("❌ Closed Client Profile tab.")
-
-                        
-                        self.driver.switch_to.window(client_dashboard_tab)
-
-                        
-                        result = self.dl_holdings(code)
-
-                        
-                        self.driver.close()
-                        self.driver.switch_to.window(initial_tabs[1])
-                        self.log("🔄 Closed client tab and returned to search tab.")
-                        return result
-                    else:
-                        self.log(f"🚨 No Client Dashboard tab opened for {code}")
-                        
-                        self.driver.close()
-                        self.driver.switch_to.window(initial_tabs[1])
-                        retry_count += 1
-                        if retry_count > max_retries:
-                            return False
-                        continue
-                else:
-                    self.log(f"🚨 No Client Profile tab opened for {code}")
+                    self.log("🆕 Switched to Client Profile tab")
+                except TimeoutException:
+                    self.log(f"🚨 No new tab opened for {code}")
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
                     continue
-                
-            except Exception as e:
-                self.log(f"❌ Error processing {code}: {str(e)}")
-                
+
                 try:
-                    current_tabs = self.driver.window_handles
-                    if len(current_tabs) > 1:
-                        self.driver.switch_to.window(current_tabs[1])
-                except:
-                    pass
+                    capital_gain_btn = wait.until(EC.element_to_be_clickable(
+                        (By.XPATH, "//a[contains(text(),'Capital Gain Report')]")
+                    ))
+                    capital_gain_btn.click()
+                    self.log("📈 Clicked Capital Gain Report button")
+                except Exception as e:
+                    self.log(f"⚠️ Capital Gain button error: {str(e)}")
+                    self.driver.close()
+                    self.driver.switch_to.window(initial_tabs[1])
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
+
+                try:
+                    wait.until(lambda d: len(d.window_handles) > len(new_tabs))
+                    dashboard_tabs = self.driver.window_handles
+                    client_dashboard_tab = dashboard_tabs[-1]
+                    self.driver.switch_to.window(client_dashboard_tab)
+                    self.log("📊 Switched to Client Dashboard tab")
+                except TimeoutException:
+                    self.log(f"🚨 No Dashboard tab opened for {code}")
+                    self.driver.close()
+                    self.driver.switch_to.window(initial_tabs[1])
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
+
+                self.driver.switch_to.window(client_profile_tab)
+                self.driver.close()
+                self.driver.switch_to.window(client_dashboard_tab)
             
+                result = self.dl_holdings(code)  
+            
+                self.driver.close()
+                self.driver.switch_to.window(initial_tabs[1])
+                self.log("🔄 Cleanup complete")
+                return result
+
+            except Exception as e:
+                self.log(f"❌ Critical error: {str(e)}")
+                current_tabs = self.driver.window_handles
+                for tab in current_tabs[1:]:
+                    self.driver.switch_to.window(tab)
+                    self.driver.close()
+                self.driver.switch_to.window(initial_tabs[0])
                 retry_count += 1
                 if retry_count > max_retries:
                     return False
                 time.sleep(2)
-            
+    
         return False
 
     def dl_holdings(self, code):
@@ -385,115 +373,103 @@ class Scraper:
         wait = WebDriverWait(self.driver, 15)
         retry_count = 0
         max_retries = 2
-    
+
         while retry_count <= max_retries:
             try:
-                
                 initial_tabs = self.driver.window_handles
                 if len(initial_tabs) > 1:
                     self.driver.switch_to.window(initial_tabs[1])
-            
-                
-                search_box = wait.until(EC.presence_of_element_located((By.ID, "UCBanner_txtSearch")))
+
+                search_box = wait.until(EC.presence_of_element_located((By.ID, "b2-Input_Search")))
                 search_box.clear()
                 search_box.send_keys(code)
                 self.log(f"⌨️ Entering client code: {code}")
-            
-                
-                time.sleep(2)
-            
-                
+
                 try:
-                    suggestions = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "ui-menu-item")))
-                    first_suggestion = self.driver.find_element(By.CLASS_NAME, "ui-menu-item")
+                    suggestions_container = wait.until(
+                        EC.visibility_of_element_located(
+                            (By.CSS_SELECTOR, ".reactive-autocomplete-list-container")
+                        )
+                    )
+                    first_suggestion = suggestions_container.find_element(
+                        By.CSS_SELECTOR, "div:first-child"  
+                    )
                     first_suggestion.click()
+                    self.log("✅ Selected first autocomplete suggestion")
+                
                 except Exception as e:
-                    self.log(f"⚠️ No suggestions found for {code}, retrying...")
+                    self.log(f"⚠️ No suggestions found for {code}: {str(e)}, retrying...")
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
                     continue
-                
-                
-                time.sleep(5)
-                new_tabs = self.driver.window_handles
-            
-                if len(new_tabs) > len(initial_tabs):
+
+                try:
+                    wait.until(lambda d: len(d.window_handles) > len(initial_tabs))
+                    new_tabs = self.driver.window_handles
                     client_profile_tab = new_tabs[-1]
                     self.driver.switch_to.window(client_profile_tab)
-                    self.log("🆕 Switched to the Client Profile tab.")
-                
-                    
-                    try:
-                        capital_gain_btn = wait.until(EC.element_to_be_clickable(
-                            (By.XPATH, "//a[contains(text(),'Capital Gain Report')]")))
-                        capital_gain_btn.click()
-                    except Exception as e:
-                        self.log(f"⚠️ Could not find Capital Gain Report button: {str(e)}")
-                        
-                        self.driver.close()
-                        self.driver.switch_to.window(initial_tabs[1])
-                        retry_count += 1
-                        if retry_count > max_retries:
-                            return False
-                        continue
-                
-                    
-                    time.sleep(5)
-                    dashboard_tabs = self.driver.window_handles
-                
-                    if len(dashboard_tabs) > len(new_tabs):
-                        client_dashboard_tab = dashboard_tabs[-1]
-                        self.driver.switch_to.window(client_dashboard_tab)
-                        self.log("📊 Switched to the Client Dashboard tab.")
-                    
-                        
-                        self.driver.switch_to.window(client_profile_tab)
-                        self.driver.close()
-                        self.log("❌ Closed Client Profile tab.")
-                    
-                        
-                        self.driver.switch_to.window(client_dashboard_tab)
-                    
-                        
-                        result = self.dl_mf_transactions(code, from_date, to_date)
-                    
-                        
-                        self.driver.close()
-                        self.driver.switch_to.window(initial_tabs[1])
-                        self.log("🔄 Closed client tab and returned to search tab.")
-                        return result
-                    else:
-                        self.log(f"🚨 No Client Dashboard tab opened for {code}")
-                        
-                        self.driver.close()
-                        self.driver.switch_to.window(initial_tabs[1])
-                        retry_count += 1
-                        if retry_count > max_retries:
-                            return False
-                        continue
-                else:
-                    self.log(f"🚨 No Client Profile tab opened for {code}")
+                    self.log("🆕 Switched to Client Profile tab")
+                except TimeoutException:
+                    self.log(f"🚨 No new tab opened for {code}")
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
                     continue
-                
-            except Exception as e:
-                self.log(f"❌ Error processing MF transactions for {code}: {str(e)}")
-                
+
                 try:
-                    current_tabs = self.driver.window_handles
-                    if len(current_tabs) > 1:
-                        self.driver.switch_to.window(current_tabs[1])
-                except:
-                    pass
+                    capital_gain_btn = wait.until(EC.element_to_be_clickable(
+                        (By.XPATH, "//a[contains(text(),'Capital Gain Report')]")
+                    ))
+                    capital_gain_btn.click()
+                    self.log("📈 Clicked Capital Gain Report button")
+                except Exception as e:
+                    self.log(f"⚠️ Capital Gain button error: {str(e)}")
+                    self.driver.close()
+                    self.driver.switch_to.window(initial_tabs[1])
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
+
+                try:
+                    wait.until(lambda d: len(d.window_handles) > len(new_tabs))
+                    dashboard_tabs = self.driver.window_handles
+                    client_dashboard_tab = dashboard_tabs[-1]
+                    self.driver.switch_to.window(client_dashboard_tab)
+                    self.log("📊 Switched to Client Dashboard tab")
+                except TimeoutException:
+                    self.log(f"🚨 No Dashboard tab opened for {code}")
+                    self.driver.close()
+                    self.driver.switch_to.window(initial_tabs[1])
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        return False
+                    continue
+
+                self.driver.switch_to.window(client_profile_tab)
+                self.driver.close()
+                self.driver.switch_to.window(client_dashboard_tab)
             
+                result = self.dl_mf_transactions(code, from_date, to_date)
+            
+                self.driver.close()
+                self.driver.switch_to.window(initial_tabs[1])
+                self.log("🔄 Cleanup complete")
+                return result
+
+            except Exception as e:
+                self.log(f"❌ Critical error: {str(e)}")
+                current_tabs = self.driver.window_handles
+                for tab in current_tabs[1:]:
+                    self.driver.switch_to.window(tab)
+                    self.driver.close()
+                self.driver.switch_to.window(initial_tabs[0])
                 retry_count += 1
                 if retry_count > max_retries:
                     return False
                 time.sleep(2)
-            
+    
         return False
 
     def process_all_clients_mf_trans(self, codes, update_cb=None, from_date=None, to_date=None):
