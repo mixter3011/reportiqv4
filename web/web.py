@@ -100,6 +100,8 @@ class Scraper:
                 initial_tabs = self.driver.window_handles
                 if len(initial_tabs) > 1:
                     self.driver.switch_to.window(initial_tabs[1])
+                else:
+                    self.driver.switch_to.window(initial_tabs[0])
 
                 search_box = wait.until(EC.presence_of_element_located((By.ID, "b2-Input_Search")))
                 search_box.clear()
@@ -117,7 +119,7 @@ class Scraper:
                     )
                     first_suggestion.click()
                     self.log("✅ Selected first autocomplete suggestion")
-                
+            
                 except Exception as e:
                     self.log(f"⚠️ No suggestions found for {code}: {str(e)}, retrying...")
                     retry_count += 1
@@ -126,7 +128,7 @@ class Scraper:
                     continue
 
                 try:
-                    wait.until(lambda d: len(d.window_handles) > len(initial_tabs))
+                    WebDriverWait(self.driver, 10).until(EC.number_of_windows_to_be(len(initial_tabs) + 1))
                     new_tabs = self.driver.window_handles
                     client_profile_tab = new_tabs[-1]
                     self.driver.switch_to.window(client_profile_tab)
@@ -147,14 +149,14 @@ class Scraper:
                 except Exception as e:
                     self.log(f"⚠️ Capital Gain button error: {str(e)}")
                     self.driver.close()
-                    self.driver.switch_to.window(initial_tabs[1])
+                    self.driver.switch_to.window(initial_tabs[1] if len(initial_tabs) > 1 else initial_tabs[0])
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
                     continue
 
                 try:
-                    wait.until(lambda d: len(d.window_handles) > len(new_tabs))
+                    WebDriverWait(self.driver, 10).until(EC.number_of_windows_to_be(len(new_tabs) + 1))
                     dashboard_tabs = self.driver.window_handles
                     client_dashboard_tab = dashboard_tabs[-1]
                     self.driver.switch_to.window(client_dashboard_tab)
@@ -162,7 +164,7 @@ class Scraper:
                 except TimeoutException:
                     self.log(f"🚨 No Dashboard tab opened for {code}")
                     self.driver.close()
-                    self.driver.switch_to.window(initial_tabs[1])
+                    self.driver.switch_to.window(initial_tabs[1] if len(initial_tabs) > 1 else initial_tabs[0])
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
@@ -171,26 +173,28 @@ class Scraper:
                 self.driver.switch_to.window(client_profile_tab)
                 self.driver.close()
                 self.driver.switch_to.window(client_dashboard_tab)
-            
+        
                 result = self.dl_holdings(code)  
-            
+        
                 self.driver.close()
-                self.driver.switch_to.window(initial_tabs[1])
+                self.driver.switch_to.window(initial_tabs[1] if len(initial_tabs) > 1 else initial_tabs[0])
                 self.log("🔄 Cleanup complete")
                 return result
 
             except Exception as e:
                 self.log(f"❌ Critical error: {str(e)}")
                 current_tabs = self.driver.window_handles
+                # Close all except main tab
                 for tab in current_tabs[1:]:
                     self.driver.switch_to.window(tab)
                     self.driver.close()
-                self.driver.switch_to.window(initial_tabs[0])
-                retry_count += 1
+                if current_tabs:
+                    self.driver.switch_to.window(current_tabs[0])
+                    retry_count += 1
                 if retry_count > max_retries:
                     return False
                 time.sleep(2)
-    
+
         return False
 
     def dl_holdings(self, code):
@@ -309,7 +313,17 @@ class Scraper:
 
             try:
                 self.log("💾 Downloading MF transactions")
-            
+                try:
+                    alert = self.driver.switch_to.alert
+                    alert_text = alert.text
+                    if "no record" in alert_text.lower():
+                        self.log(f"⚠️ Alert encountered: {alert_text}")
+                        alert.accept()
+                        return False
+                    else:
+                        alert.dismiss()
+                except:
+                    pass
                 try:
                     excel_button = wait.until(EC.element_to_be_clickable((By.ID, "MainContent_ctl02_imgExcel")))
                     excel_button.click()
@@ -369,7 +383,7 @@ class Scraper:
             return False
         
     def search_client_mf_trans(self, code, from_date=None, to_date=None):
-        self.log(f"🔎 Processing client MF transactions: {code}")
+        self.log(f"🔎 Processing client MF transactions: {code} | Dates: {from_date} to {to_date}")
         wait = WebDriverWait(self.driver, 15)
         retry_count = 0
         max_retries = 2
@@ -379,6 +393,8 @@ class Scraper:
                 initial_tabs = self.driver.window_handles
                 if len(initial_tabs) > 1:
                     self.driver.switch_to.window(initial_tabs[1])
+                else:
+                    self.driver.switch_to.window(initial_tabs[0])
 
                 search_box = wait.until(EC.presence_of_element_located((By.ID, "b2-Input_Search")))
                 search_box.clear()
@@ -396,7 +412,7 @@ class Scraper:
                     )
                     first_suggestion.click()
                     self.log("✅ Selected first autocomplete suggestion")
-                
+            
                 except Exception as e:
                     self.log(f"⚠️ No suggestions found for {code}: {str(e)}, retrying...")
                     retry_count += 1
@@ -407,9 +423,12 @@ class Scraper:
                 try:
                     wait.until(lambda d: len(d.window_handles) > len(initial_tabs))
                     new_tabs = self.driver.window_handles
-                    client_profile_tab = new_tabs[-1]
-                    self.driver.switch_to.window(client_profile_tab)
-                    self.log("🆕 Switched to Client Profile tab")
+                    if len(new_tabs) > len(initial_tabs):
+                        client_profile_tab = new_tabs[-1]
+                        self.driver.switch_to.window(client_profile_tab)
+                        self.log("🆕 Switched to Client Profile tab")
+                    else:
+                        raise TimeoutException("No new tab opened")
                 except TimeoutException:
                     self.log(f"🚨 No new tab opened for {code}")
                     retry_count += 1
@@ -426,7 +445,7 @@ class Scraper:
                 except Exception as e:
                     self.log(f"⚠️ Capital Gain button error: {str(e)}")
                     self.driver.close()
-                    self.driver.switch_to.window(initial_tabs[1])
+                    self.driver.switch_to.window(initial_tabs[1] if len(initial_tabs) > 1 else initial_tabs[0])
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
@@ -435,13 +454,16 @@ class Scraper:
                 try:
                     wait.until(lambda d: len(d.window_handles) > len(new_tabs))
                     dashboard_tabs = self.driver.window_handles
-                    client_dashboard_tab = dashboard_tabs[-1]
-                    self.driver.switch_to.window(client_dashboard_tab)
-                    self.log("📊 Switched to Client Dashboard tab")
+                    if len(dashboard_tabs) > len(new_tabs):
+                        client_dashboard_tab = dashboard_tabs[-1]
+                        self.driver.switch_to.window(client_dashboard_tab)
+                        self.log("📊 Switched to Client Dashboard tab")
+                    else:
+                        raise TimeoutException("No dashboard tab opened")
                 except TimeoutException:
                     self.log(f"🚨 No Dashboard tab opened for {code}")
                     self.driver.close()
-                    self.driver.switch_to.window(initial_tabs[1])
+                    self.driver.switch_to.window(initial_tabs[1] if len(initial_tabs) > 1 else initial_tabs[0])
                     retry_count += 1
                     if retry_count > max_retries:
                         return False
@@ -450,11 +472,12 @@ class Scraper:
                 self.driver.switch_to.window(client_profile_tab)
                 self.driver.close()
                 self.driver.switch_to.window(client_dashboard_tab)
-            
+        
                 result = self.dl_mf_transactions(code, from_date, to_date)
-            
+        
                 self.driver.close()
-                self.driver.switch_to.window(initial_tabs[1])
+                if len(self.driver.window_handles) > 0:
+                    self.driver.switch_to.window(self.driver.window_handles[0])
                 self.log("🔄 Cleanup complete")
                 return result
 
@@ -462,10 +485,14 @@ class Scraper:
                 self.log(f"❌ Critical error: {str(e)}")
                 current_tabs = self.driver.window_handles
                 for tab in current_tabs[1:]:
-                    self.driver.switch_to.window(tab)
-                    self.driver.close()
-                self.driver.switch_to.window(initial_tabs[0])
-                retry_count += 1
+                    try:
+                        self.driver.switch_to.window(tab)
+                        self.driver.close()
+                    except:
+                        pass
+                if current_tabs:
+                    self.driver.switch_to.window(current_tabs[0])
+                    retry_count += 1
                 if retry_count > max_retries:
                     return False
                 time.sleep(2)
@@ -476,25 +503,17 @@ class Scraper:
         success = 0
         self.fail_list = []
         
-        date_info = ""
-        if from_date and to_date:
-            date_info = f" with date range {from_date} to {to_date}"
-    
-        for i in range(0, len(codes), self.max_parallel):
-            batch = codes[i:i+self.max_parallel]
-            self.log(f"🚀 Processing MF transactions batch{date_info}: {batch}")
-        
-            for code in batch:
-                if self.search_client_mf_trans(code, from_date, to_date):
-                    success += 1
-                else:
-                    self.fail_list.append(code)
+        for code in codes:
+            if self.search_client_mf_trans(code, from_date, to_date):
+                success += 1
+            else:
+                self.fail_list.append(code)
             
-                if update_cb:
-                    update_cb(success, len(codes), self.fail_list)
-                
-            time.sleep(5)
-    
+            if update_cb:
+                update_cb(success, len(codes), self.fail_list)
+            
+            time.sleep(1)  
+        
         return success, self.fail_list
     
     def quit(self):

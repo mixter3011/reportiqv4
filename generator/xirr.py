@@ -540,11 +540,44 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
     except Exception as e:
         print(f"Error saving file: {e}")
         return "Error saving results"
+
+def process_directory(mf_dir, init_val, curr_val, start_date=None):
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    ledger_dir = os.path.join(desktop, 'Ledger')
+    results = []
     
-def proc(cl_code=None, init_val=100000, curr_val=None, start_date=None):
+    for mf_file in glob.glob(os.path.join(mf_dir, "*.xlsx")) + glob.glob(os.path.join(mf_dir, "*.xls")):
+        csv_file = conv(mf_file)
+        if csv_file:
+            print(f"Converted {mf_file} to {csv_file}")
+    
+    for mf_file in glob.glob(os.path.join(mf_dir, "*.csv")):
+        try:
+            code = os.path.basename(mf_file).split('_')[0]
+            ledger_files = glob.glob(os.path.join(ledger_dir, f"{code}_Ledger*"))
+            
+            if not ledger_files:
+                print(f"Skipping {code} - no ledger file")
+                continue
+                
+            ledger_df = pd.read_csv(ledger_files[0])
+            mf_df = pd.read_csv(mf_file)
+            
+            out_file = main(ledger_df, mf_df, init_val, curr_val, 
+                           cl_code=code, start_date=start_date)
+            results.append(out_file)
+        except Exception as e:
+            print(f"Error processing {mf_file}: {str(e)}")
+    
+    return results
+
+def proc(cl_code=None, init_val=100000, curr_val=None, start_date=None, input_dir=None):
     if curr_val is None:
         curr_val = init_val 
-        
+    
+    if input_dir: 
+        return process_directory(input_dir, init_val, curr_val, start_date)
+    
     if cl_code:
         ldg_f, mf_f = get_files(cl_code)
         
