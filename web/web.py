@@ -5,6 +5,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+
+from generator.xirr import conv
 class Scraper:
     def __init__(self, dl_folder, mf_folder):
         self.driver = None
@@ -301,7 +303,7 @@ class Scraper:
                             search_btn = wait.until(EC.element_to_be_clickable((
                                 By.XPATH, "//button[contains(text(), 'Submit') or contains(text(), 'Search') or contains(text(), 'Go')]")))
                             search_btn.click()
-                            time.sleep(3)
+                            time.sleep(2)
                         except Exception as e:
                             self.log(f"⚠️ Could not click search button: {str(e)}")
                     except Exception as e:
@@ -356,7 +358,15 @@ class Scraper:
                 if downloaded_files:
                     latest_file = os.path.join(self.dl_folder, downloaded_files[0])
                     new_file_name = os.path.join(self.mf_folder, f"{code}_MFTrans.xlsx")
-                
+
+                    try:
+                        if new_file_name.endswith(('.xls', '.xlsx')):
+                            csv_path = conv(new_file_name)
+                            if csv_path:
+                                self.log(f"Converted to CSV: {csv_path}")
+                    except Exception as e:
+                        self.log(f"Conversion error: {str(e)}")
+                    
                     os.makedirs(os.path.dirname(new_file_name), exist_ok=True)
                 
                     retry = 0

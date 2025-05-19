@@ -7,7 +7,7 @@ import traceback
 import shutil
 from generator.excel import excel_generator
 from generator.report import report_gen
-from generator.xirr import conv, proc
+from generator.xirr import conv, parse_float, proc
 from web.web import Scraper
 from PyQt5.QtCore import Qt, QDate
 from utils.processor import Processor
@@ -47,17 +47,56 @@ class Main(QMainWindow):
             os.makedirs(path)
         return path
     
-    def _convert_mf_excel_to_csv(self):
-        mf_folder = self.mf_folder
-        for fname in os.listdir(mf_folder):
-            if fname.endswith(('.xlsx', '.xls')):
+    def _convert_mf_transactions(self):
+        try:
+            self.log("Converting all MF transaction files to CSV...")
+            mf_files = [f for f in os.listdir(self.mf_folder) if f.endswith((".xlsx", ".xls")) and "MFTrans" in f]
+            converted = 0
+            for file in mf_files:
                 try:
-                    df = pd.read_excel(os.path.join(mf_folder, fname))
-                    csv_name = os.path.splitext(fname)[0] + '.csv'
-                    df.to_csv(os.path.join(mf_folder, csv_name), index=False)
-                    self.log(f"Converted {fname} to CSV")
+                    self._convert_mf_transaction_file(file)
+                    converted += 1
                 except Exception as e:
-                    self.log(f"Error converting {fname}: {str(e)}")
+                    self.log(f"Error converting {file}: {str(e)}")
+            self.log(f"Converted {converted} out of {len(mf_files)} MF transaction files to CSV")
+        except Exception as e:
+            self.log(f"Error in batch conversion: {str(e)}")
+    
+    def _convert_ledger_files(self):
+        ledger_dir = os.path.join(os.path.expanduser('~'), 'Desktop', 'Ledger')
+        if not os.path.exists(ledger_dir):
+            self.log("⚠️ Ledger directory not found!")
+            return False
+
+        conversion_needed = False
+        conversion_done = False
+    
+        for fname in os.listdir(ledger_dir):
+            if fname.lower().endswith(('.xlsx', '.xls')):
+                conversion_needed = True
+                try:
+                    full_path = os.path.join(ledger_dir, fname)
+                    csv_path = os.path.join(ledger_dir, fname.rsplit('.', 1)[0] + '.csv')
+                
+                    if not os.path.exists(csv_path):
+                        df = pd.read_excel(full_path)
+                        df.to_csv(csv_path, index=False)
+                        self.log(f"Converted ledger: {fname} → {csv_path}")
+                        conversion_done = True
+                    else:
+                        self.log(f"CSV already exists for: {fname}")
+                except Exception as e:
+                    self.log(f"🚨 Ledger conversion failed for {fname}: {str(e)}")
+                    return False
+
+        if conversion_needed:
+            return conversion_done  
+        else:
+            if any(fname.endswith('.csv') for fname in os.listdir(ledger_dir)):
+                self.log("✓ Ledger files already in CSV format")
+                return True
+            self.log("⚠️ No ledger files found (neither Excel nor CSV)")
+            return False
     
     def _get_client_codes(self):
         manual_code = self.xirr_code_input.text().strip()
@@ -94,43 +133,26 @@ class Main(QMainWindow):
         if not code:
             QMessageBox.warning(self, "Error", "Please enter a client code")
             return
-            
         if not self.scraper:
             QMessageBox.warning(self, "Error", "Please login first")
             return
-            
+        
         self.log(f"Processing manual client code: {code}")
-        
-        holdings_success, holdings_fails = self.scraper.process_all_clients([code], self.update_sum)
-        
-        if holdings_success > 0:
-            self.status_lbl.setText(f"Successfully downloaded holdings for {code}")
-            
-            choice = QMessageBox.question(
-                self,
-                "Download MF Transactions",
-                f"Holdings downloaded for {code}. Do you want to download MF transactions too?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes
-            )
-            
-            if choice == QMessageBox.StandardButton.Yes:
-                self.status_lbl.setText(f"Downloading MF transactions for {code}...")
-                mf_success, mf_fails = self.scraper.process_all_clients_mf_trans([code], self.update_sum)
-                
-                if mf_success > 0:
-                    self.status_lbl.setText(f"Successfully downloaded holdings and MF transactions for {code}")
-                    QMessageBox.information(self, "Success", 
-                        f"Successfully downloaded holdings and MF transactions for {code}")
-                else:
-                    self.status_lbl.setText(f"Downloaded holdings but failed to download MF transactions for {code}")
-                    QMessageBox.warning(self, "Partial Success", 
-                        f"Downloaded holdings but failed to download MF transactions for {code}")
-            else:
-                QMessageBox.information(self, "Success", f"Downloaded holdings for {code}")
+    
+        reply = QMessageBox.question(
+            self,
+            "Download Holdings",
+            f"Download holdings for client {code}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        )
+    
+        if reply == QMessageBox.StandardButton.Yes:
+            holdings_success, holdings_fails = self.scraper.process_all_clients([code], self.update_sum)
+            if holdings_success > 0:
+                self.process_hdng(auto_continue=True, single_client=code)
         else:
-            self.status_lbl.setText(f"Failed to download holdings for {code}")
-            QMessageBox.critical(self, "Error", f"Failed to download holdings for {code}")
+            self.generate_excel(auto_mode=True, single_client=code)
 
     def init_ui(self):
         self.setWindowTitle("PORTFOLIO RETURNS TRACKER")
@@ -212,7 +234,7 @@ class Main(QMainWindow):
         self.manual_code_input.setPlaceholderText("ROMO####")
         self.manual_code_input.setStyleSheet("color: black;")
 
-        manual_fetch_btn = QPushButton("LOAD")
+        manual_fetch_btn = QPushButton("GENERATE")
         manual_fetch_btn.setStyleSheet("""
             background-color: black;
             color: white;
@@ -275,21 +297,10 @@ class Main(QMainWindow):
         
         layout.addLayout(date_layout)
         
-        proc_mf_btn = QPushButton("DOWNLOAD MF TRANSACTIONS")
-        proc_mf_btn.setStyleSheet("""
-            background-color: black;
-            color: white;
-            font-weight: bold;
-            padding: 3px 10px;
-            border-radius: 5px;
-        """)
-        proc_mf_btn.clicked.connect(self.xirr_workflow)
-        layout.addWidget(proc_mf_btn)
-        
         start_date_layout = QHBoxLayout()
         
         start_date_label = QLabel("ENTER START DATE")
-        start_date_label.setStyleSheet("color: black;")
+        start_date_label.setStyleSheet("color: black; font-size: 14px; font-weight: bold; padding: 5px;")
         start_date_layout.addWidget(start_date_label)
         
         self.start_date = QDateEdit(calendarPopup=True)
@@ -336,25 +347,6 @@ class Main(QMainWindow):
         init_portfolio_val_layout.addWidget(self.init_portfolio_val_input)
 
         layout.addLayout(init_portfolio_val_layout)
-        
-        cur_portfolio_val_layout = QHBoxLayout()
-
-        cur_portfolio_val_title = QLabel("ENTER CURRENT PORTFOLIO VALUE")
-        cur_portfolio_val_title.setStyleSheet("""
-            font-size: 14px;
-            font-weight: bold;
-            color: black;
-            padding: 5px;
-        """)
-
-        self.cur_portfolio_val_input = QLineEdit()
-        self.cur_portfolio_val_input.setPlaceholderText("₹1,00,000")
-        self.cur_portfolio_val_input.setStyleSheet("color: black;")
-
-        cur_portfolio_val_layout.addWidget(cur_portfolio_val_title)
-        cur_portfolio_val_layout.addWidget(self.cur_portfolio_val_input)
-
-        layout.addLayout(cur_portfolio_val_layout)
         
         gen_xirr_btn = QPushButton("GENERATE XIRR")
         gen_xirr_btn.setStyleSheet("""
@@ -504,75 +496,53 @@ class Main(QMainWindow):
             QMessageBox.critical(self, "Login Error", f"Failed to log in: {e}")
 
     def open_excel(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Excel File", "", "Excel Files (*.xlsx *.xls);;All Files (*)")
-        if not file_path:
-            return
+        reply = QMessageBox.question(
+            self,
+            "Download Holdings",
+            "Do you want to download holdings before generating reports?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            file_path, _ = QFileDialog.getOpenFileName(self, "Select Client Codes File", 
+                                                     "", "Excel Files (*.xlsx *.xls)")
+            if not file_path:
+                return
 
-        self.file_path = file_path    
-
-        try:
             try:
                 df = pd.read_excel(file_path)
-            except Exception as e1:
-                try:
-                    df = pd.read_excel(file_path, engine='openpyxl')
-                except Exception as e2:
-                    df = pd.read_excel(file_path, engine='xlrd')
+                column_names = [col.lower().strip() for col in df.columns]
+                client_code_variations = ['client code', 'clientcode', 'client_code', 'code', 'client id', 'clientid', 'client_id']
+                code_column = None
+                for variant in client_code_variations:
+                    if variant in column_names:
+                        code_column = df.columns[column_names.index(variant)]
+                        break
 
-            column_names = [col.lower().strip() for col in df.columns]
-            client_code_variations = ['client code', 'clientcode', 'client_code', 'code', 'client id', 'clientid', 'client_id']
+                if code_column is None:
+                    QMessageBox.warning(self, "Error", "No client code column found!")
+                    return
 
-            code_column = None
-            for variant in client_code_variations:
-                if variant in column_names:
-                    code_column = df.columns[column_names.index(variant)]
-                    break
+                codes = df[code_column].dropna().astype(str).tolist()
+                codes = [code.strip() for code in codes]
 
-            if code_column is None:
-                QMessageBox.warning(self, "Error", f"No client code column found. Available columns: {', '.join(df.columns)}")
-                return
-    
-            codes = df[code_column].dropna().astype(str).tolist()
-            codes = [code.strip() for code in codes]
+                if not codes:
+                    QMessageBox.warning(self, "Error", "No client codes found in the Excel file!")
+                    return
 
-            if not codes:
-                QMessageBox.warning(self, "Error", "No client codes found in the Excel file!")
-                return
+                self.status_lbl.setText(f"Downloading holdings for {len(codes)} clients...")
+                holdings_success, holdings_fails = self.scraper.process_all_clients(codes, self.update_sum)
 
-            QMessageBox.information(self, "Success", f"Loaded {len(codes)} client codes.")
+                if holdings_success > 0:
+                    self.process_hdng(auto_continue=True)
+                else:
+                    QMessageBox.critical(self, "Error", "Failed to download any holdings!")
 
-            if not self.scraper:
-                QMessageBox.warning(self, "Error", "Please login first before processing client codes.")
-                return
-
-            if "ROMO2603" in codes:
-                self.log("ROMO2603 found in client codes list, will be processed")
-            else:
-                self.log("Note: ROMO2603 not found in client codes list")
-
-            self.status_lbl.setText(f"Downloading holdings for {len(codes)} clients...")
-            holdings_success, holdings_fails = self.scraper.process_all_clients(codes, self.update_sum)
-    
-            summary = []
-            summary.append(f"Downloaded holdings: {holdings_success}/{len(codes)} clients")
-            summary.append(f"Failed holdings: {len(holdings_fails)}")
-            if holdings_fails:
-                summary.append(f"Failed holdings clients: {', '.join(holdings_fails[:5])}" + 
-                           ("..." if len(holdings_fails) > 5 else ""))
-    
-            self.sum_lbl.setText("\n".join(summary))
-    
-            if holdings_success > 0 or len(holdings_fails) < len(codes):
-                self.status_lbl.setText("Processing downloaded holdings...")
-                self.process_hdng(auto_continue=True)
-            else:
-                QMessageBox.critical(self, "Error", "Failed to download any holdings. Cannot continue with processing.")
-                return
-
-        except Exception as e:
-            error_details = traceback.format_exc()
-            print(f"Excel processing error: {error_details}")
-            QMessageBox.critical(self, "Error", f"Failed to process file: {str(e)}\n\nCheck console for full error details.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Error processing file: {str(e)}")
+        else:
+            self.generate_excel(auto_mode=False)
     
     def update_sum(self, success, total, fails):
         fail_txt = "\nFailed clients: " + ", ".join(fails) if fails else ""
@@ -581,19 +551,22 @@ class Main(QMainWindow):
             f"Failed downloads: {len(fails)}{fail_txt}"
         )
     
-    def process_hdng(self, auto_continue=False):
-        folder = self.dl_folder  
+    def process_hdng(self, auto_continue=False, single_client=None):
+        folder = self.dl_folder
         self.log(f"Processing holdings from: {folder}")
-
         try:
-            excel_files = [os.path.join(folder, f) for f in os.listdir(folder) 
+            excel_files = [os.path.join(folder, f) for f in os.listdir(folder)
                           if f.endswith(('.xlsx', '.xls'))]
-    
+        
             if not excel_files:
                 self.sum_lbl.setText("No Excel files found in Holdings folder.")
                 QMessageBox.warning(self, "Error", "No Excel files found in Holdings folder.")
                 return
-        
+            
+            if single_client:
+                excel_files = [f for f in excel_files if single_client in os.path.basename(f)]
+                self.log(f"Filtered to {len(excel_files)} files for client {single_client}")
+            
             converted_count = 0
             for excel_file in excel_files:
                 try:
@@ -604,43 +577,38 @@ class Main(QMainWindow):
                             df = pd.read_excel(excel_file, engine='openpyxl')
                         except Exception as e2:
                             df = pd.read_excel(excel_file, engine='xlrd')
-            
                     csv_file = os.path.splitext(excel_file)[0] + '.csv'
                     df.to_csv(csv_file, index=False)
                     converted_count += 1
-            
                 except Exception as e:
                     print(f"Error converting {excel_file}: {str(e)}")
-    
+                
             self.sum_lbl.setText(
                 f"Converted {converted_count}/{len(excel_files)} Excel files to CSV in {folder}"
             )
-    
+        
             self.processor = Processor(folder)
-    
             if hasattr(self.processor, 'set_required_files') and "Ledger" in self.required_files and self.required_files["Ledger"] is not None:
                 self.processor.set_required_files(
                     ledger=self.required_files["Ledger"],
                     mf_transactions=None,
                     sip=None
                 )
-    
+            
             out_file = self.processor.process_holdings()
-
             if out_file:
                 df = pd.read_excel(out_file)
                 count = df.shape[0]
-
                 self.sum_lbl.setText(
                     f"Converted {converted_count} files to CSV.\n"
                     f"Extracted holdings for {count} clients.\n"
                     f"Report saved: {out_file}"
                 )
             
-                if auto_continue:
-                    self.status_lbl.setText("Generating internal review sheets...")
-                    self.generate_excel(auto_mode=True)
-        
+            if auto_continue:
+                self.status_lbl.setText("Generating internal review sheets...")
+                self.generate_excel(auto_mode=True, single_client=single_client)
+            
         except Exception as e:
             error_details = traceback.format_exc()
             print(f"Processing error: {error_details}")
@@ -857,12 +825,12 @@ class Main(QMainWindow):
             self.log(f"Report generation error: {str(e)}")
             QMessageBox.critical(self, "Error", f"Failed to generate reports: {str(e)}")
 
-    def generate_excel(self, auto_mode=False):
+    def generate_excel(self, auto_mode=False, single_client=None):
         try:
             self.log("Generating Excel files from CSV files...")
             folder = self.dl_folder  
             ledger_folder = os.path.join(os.path.dirname(folder), "Ledger")  
-    
+
             desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
             excel_reports_folder = os.path.join(desktop, "excel_reports")
             if not os.path.exists(excel_reports_folder):
@@ -871,9 +839,13 @@ class Main(QMainWindow):
             holdings_files = [os.path.join(folder, f) for f in os.listdir(folder) 
                         if f.endswith('.csv')]
 
+            if single_client:
+                holdings_files = [f for f in holdings_files if single_client in os.path.basename(f)]
+                self.log(f"Filtered to {len(holdings_files)} holdings files for client {single_client}")
+
             if not holdings_files:
-                self.log("No CSV files found in Holdings folder.")
-                QMessageBox.warning(self, "Error", "No CSV files found in Holdings folder.")
+                self.log("No matching CSV files found in Holdings folder.")
+                QMessageBox.warning(self, "Error", "No matching CSV files found in Holdings folder.")
                 return
         
             ledger_files = {}
@@ -881,7 +853,11 @@ class Main(QMainWindow):
                 for f in os.listdir(ledger_folder):
                     if f.endswith('_Ledger.csv'):
                         client_code = f.replace('_Ledger.csv', '')
-                        ledger_files[client_code] = os.path.join(ledger_folder, f)
+                        if not single_client or single_client == client_code:
+                            ledger_files[client_code] = os.path.join(ledger_folder, f)
+                
+                if single_client and single_client not in ledger_files:
+                    self.log(f"Warning: No ledger file found for client {single_client}")
             else:
                 self.log("Ledger folder not found. Only Holdings data will be processed.")
 
@@ -946,18 +922,29 @@ class Main(QMainWindow):
             if processed_count > 0:
                 self.log(f"Generated {processed_count}/{len(holdings_files)} Excel reports in {excel_reports_folder}")
             
-                success_message = (f"Complete workflow executed successfully!\n\n"
-                                 f"Files processed: {processed_count}/{len(holdings_files)}\n"
-                                 f"Reports location: {excel_reports_folder}")
+                if single_client:
+                    success_message = (f"Internal Report generated for client {single_client}!\n\n"
+                                f"Report location: {excel_reports_folder}")
+                else:
+                    success_message = (f"Complete workflow executed successfully!\n\n"
+                                f"Files processed: {processed_count}/{len(holdings_files)}\n"
+                                f"Reports location: {excel_reports_folder}")
             
                 if auto_mode:
                     self.status_lbl.setText("Completed full workflow")
-                    self.sum_lbl.setText(f"Automated workflow complete. Generated {processed_count} internal review sheets.")
+                    if single_client:
+                        self.sum_lbl.setText(f"Generated Internal Sheet for client {single_client}.")
+                    else:
+                        self.sum_lbl.setText(f"Automated workflow complete. Generated {processed_count} internal review sheets.")
             
                 QMessageBox.information(self, "Success", success_message)
             else:
-                self.log("Failed to generate any Excel reports")
-                QMessageBox.warning(self, "Error", "Failed to generate any Excel reports")
+                if single_client:
+                    self.log(f"Failed to generate Excel report for client {single_client}")
+                    QMessageBox.warning(self, "Error", f"Failed to generate Excel report for client {single_client}")
+                else:
+                    self.log("Failed to generate any Excel reports")
+                    QMessageBox.warning(self, "Error", "Failed to generate any Excel reports")
 
         except Exception as e:
             error_details = traceback.format_exc()
@@ -1009,69 +996,292 @@ class Main(QMainWindow):
             QMessageBox.critical(self, "Error", f"XIRR failed: {str(e)}")
 
     def gen_xirr(self):
-        client_code = self.xirr_code_input.text().strip()
-    
         try:
-            init_val_text = self.init_portfolio_val_input.text().strip()
-            init_val_text = init_val_text.replace('₹', '').replace(',', '')
-            initial_value = float(init_val_text) if init_val_text else 100000
-    
-        except ValueError:
-            print("Invalid initial portfolio value. Using default of 100000.")
-            initial_value = 100000
-    
-        try:
-            curr_val_text = self.cur_portfolio_val_input.text().strip()
-            curr_val_text = curr_val_text.replace('₹', '').replace(',', '')
-            current_value = float(curr_val_text) if curr_val_text else initial_value
-    
-        except ValueError:
-            print("Invalid current portfolio value. Using same as initial value.")
-            current_value = initial_value
-    
-        q_date = self.start_date.date()
-        start_date = date(q_date.year(), q_date.month(), q_date.day())
-    
-        print("\nProcessing with the following parameters:")
-        print(f"Client Code: {client_code if client_code else 'All clients'}")
-        print(f"Initial Value: {initial_value}")
-        print(f"Current Value: {current_value}")
-        print(f"Start Date: {start_date.strftime('%d/%m/%Y')}")
-    
-        processing_msg = QMessageBox()
-        processing_msg.setWindowTitle("Processing")
-        processing_msg.setText("Generating XIRR calculation...")
-        processing_msg.setStandardButtons(QMessageBox.NoButton)
-        processing_msg.show()
-    
-        try:
-            if client_code:
-                result = proc(cl_code=client_code, init_val=initial_value, curr_val=current_value, start_date=start_date)
-                processing_msg.close()
+            manual_code = self.xirr_code_input.text().strip()
             
-                if result:
-                    QMessageBox.information(self, "Success", f"XIRR calculation complete.\nResults saved to: {result}")
-                else:
-                    QMessageBox.warning(self, "Error", "Failed to generate XIRR. Please check the files and inputs.")
-            else:
-                results = proc(init_val=initial_value, curr_val=current_value, start_date=start_date)
-                processing_msg.close()
-            
-                if results:
-                    success_text = "XIRR calculations complete. Results saved to:\n"
-                    for res in results:
-                        success_text += f"  - {res}\n"
-                    QMessageBox.information(self, "Success", success_text)
-                else:
-                    QMessageBox.warning(self, "Error", "Failed to generate XIRR. Please check the files and inputs.")
+            from_date = None
+            to_date = None
+            if self.use_date_range.isChecked():
+                from_date = self.from_date.date().toString("dd/MM/yyyy")
+                to_date = self.to_date.date().toString("dd/MM/yyyy")
+                self.log(f"Using date range: {from_date} to {to_date}")
         
-            return result if client_code else results
+            if manual_code:
+                self.log(f"Manual client code detected: {manual_code}")
+                
+                try:
+                    init_val = float(self.init_portfolio_val_input.text().replace('₹','').replace(',',''))
+                except:
+                    init_val = 100000  
+                    self.log(f"Using default initial value: {init_val}")
+                
+                start_date = self.start_date.date().toPyDate()
+                self.log(f"Using manual start date: {start_date}")
+                
+                try:
+                    curr_val = float(self.cur_portfolio_val_input.text().replace('₹','').replace(',',''))
+                except:
+                    curr_val = init_val 
+                    self.log(f"Using initial value as current value: {curr_val}")
+            
+                reply = QMessageBox.question(
+                    self,
+                    "Process Manual Client",
+                    f"Download MF transactions for {manual_code}?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+            
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.status_lbl.setText(f"Downloading MF transactions for {manual_code}...")
+                    success = self.scraper.search_client_mf_trans(manual_code, from_date, to_date)
+                
+                    if success:
+                        self.log(f"✅ Successfully downloaded MF transactions for {manual_code}")
+                        self._convert_mf_transaction_file(f"{manual_code}_MFTrans.xlsx")
+                    else:
+                        self.log(f"❌ Failed to download MF transactions for {manual_code}")
+                        QMessageBox.warning(self, "Warning", f"Failed to download MF transactions for {manual_code}")
+                
+                self.status_lbl.setText(f"Generating XIRR for {manual_code}...")
+                out_file = proc(code=manual_code, init_val=init_val, curr_val=curr_val, start_date=start_date)
+                
+                if out_file:
+                    self.log(f"✅ Successfully generated XIRR report for {manual_code}")
+                    self.status_lbl.setText(f"XIRR report generated for {manual_code}")
+                    QMessageBox.information(
+                        self, 
+                        "XIRR Report Generated", 
+                        f"XIRR report has been generated for {manual_code}.\n\nSaved to: {out_file}"
+                    )
+                else:
+                    self.log(f"❌ Failed to generate XIRR report for {manual_code}")
+                    QMessageBox.warning(
+                        self, 
+                        "Warning", 
+                        f"Failed to generate XIRR report for {manual_code}. Check if required files exist."
+                    )
+                return
+
+
+            self.log("Prompting user to select client codes file")
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, "Select Client Codes File", 
+                "", "Excel Files (*.xlsx *.xls)"
+            )
+            if not file_path:
+                self.log("User cancelled file selection.")
+                return
+
+            try:
+                self.log(f"Loading client codes from: {file_path}")
+                df = pd.read_excel(file_path)
+            
+                code_col = None
+                init_val_col = None
+                start_date_col = None
+            
+                for col in df.columns:
+                    col_lower = col.lower()
+                    if 'client' in col_lower and 'code' in col_lower:
+                        code_col = col
+                    elif 'initial' in col_lower and 'value' in col_lower:
+                        init_val_col = col
+                    elif 'start' in col_lower and 'date' in col_lower:
+                        start_date_col = col
+            
+                if not code_col:
+                    self.log("Could not find client code column in Excel file")
+                    QMessageBox.critical(self, "Error", "Could not find client code column in Excel file")
+                    return
+            
+                if not init_val_col:
+                    self.log("Warning: Initial value column not found, will use default values")
+                    QMessageBox.warning(self, "Warning", "Initial value column not found. Will use default values.")
+            
+                if not start_date_col:
+                    self.log("Warning: Start date column not found, will use default dates")
+                    QMessageBox.warning(self, "Warning", "Start date column not found. Will use default dates.")
+            
+                client_data = {}
+                for _, row in df.iterrows():
+                    code = str(row[code_col]).strip()
+                    if not code or pd.isna(code):
+                        continue
+                
+                    client_data[code] = {
+                        'code': code,
+                        'init_val': float(row[init_val_col]) if init_val_col and not pd.isna(row[init_val_col]) else None,
+                        'start_date': None
+                    }
+                
+                    if start_date_col and not pd.isna(row[start_date_col]):
+                        start_date_raw = row[start_date_col]
+                        if isinstance(start_date_raw, str):
+                            try:
+                                for fmt in ['%d/%m/%y', '%d/%m/%Y', '%m/%d/%y', '%m/%d/%Y']:
+                                    try:
+                                        client_data[code]['start_date'] = pd.to_datetime(start_date_raw, format=fmt).date()
+                                        break
+                                    except:
+                                        continue
+                                else:
+                                    client_data[code]['start_date'] = pd.to_datetime(start_date_raw).date()
+                            except:
+                                self.log(f"Could not parse start date for {code}: {start_date_raw}")
+                        else:
+                            client_data[code]['start_date'] = pd.to_datetime(start_date_raw).date()
+            
+                codes = list(client_data.keys())
+                self.log(f"Found {len(codes)} client codes in file")
+            
+                if not codes:
+                    self.log("No valid client codes found in file")
+                    QMessageBox.warning(self, "Warning", "No valid client codes found in file")
+                    return
+                
+            except Exception as e:
+                self.log(f"Error reading client codes file: {str(e)}")
+                QMessageBox.critical(self, "Error", f"Error reading client file: {str(e)}")
+                return
+
+            reply = QMessageBox.question(
+                self,
+                "Download MF Transactions",
+                f"Download MF transactions for {len(codes)} clients?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                self.status_lbl.setText(f"Downloading MF transactions for {len(codes)} clients...")
+                success, fails = self.scraper.process_all_clients_mf_trans(codes, self.update_sum, from_date, to_date)
+                self.log(f"Download complete: {success} succeeded, {len(fails)} failed")
+            
+                if fails:
+                    self.log(f"Failed clients: {', '.join(fails)}")
+                    QMessageBox.warning(self, "Warning", f"Failed to download MF transactions for {len(fails)} clients")
+            
+                self._convert_mf_transactions()
+            
+                self.status_lbl.setText("Generating XIRR reports...")
+            
+                try:
+                    out_files = []
+                
+                    default_init_val = None
+                    try:
+                        default_init_val = float(self.init_portfolio_val_input.text().replace('₹','').replace(',',''))
+                    except:
+                        default_init_val = 100000
+                
+                    default_start_date = self.start_date.date().toPyDate()
+                
+                    for code in codes:
+                        if code in fails:
+                            self.log(f"Skipping failed client: {code}")
+                            continue
+                        
+                        client = client_data[code]
+                        init_val = client['init_val'] if client['init_val'] is not None else default_init_val
+                        start_date = client['start_date'] if client['start_date'] is not None else default_start_date
+                    
+                        self.log(f"Processing XIRR for {code}: init_val={init_val}, start_date={start_date}")
+                    
+                        try:
+                            report_file = proc(code=code, init_val=init_val, start_date=start_date)
+                            if report_file:
+                                out_files.append(report_file)
+                                self.log(f"Generated XIRR report for {code}: {report_file}")
+                            else:
+                                self.log(f"Failed to generate XIRR report for {code}")
+                        except Exception as client_error:
+                            self.log(f"Error processing XIRR for {code}: {str(client_error)}")
+                
+                    if out_files and len(out_files) > 0:
+                        self.log(f"✅ Successfully generated {len(out_files)} XIRR reports")
+                        self.status_lbl.setText(f"Generated {len(out_files)} XIRR reports")
+                    
+                        report_list = "\n".join(out_files[:5])
+                        if len(out_files) > 5:
+                            report_list += f"\n... and {len(out_files) - 5} more"
+                    
+                        QMessageBox.information(
+                            self, 
+                            "XIRR Reports Generated", 
+                            f"Generated {len(out_files)} XIRR reports.\n\nReports saved to Desktop/xirr_reports\n\nSample reports:\n{report_list}"
+                        )
+                    else:
+                        self.log("⚠️ No XIRR reports were generated")
+                        QMessageBox.warning(
+                            self, 
+                            "Warning", 
+                            "No XIRR reports were generated. Please check if required files exist."
+                        )
+                except Exception as e:
+                    self.log(f"❌ Error generating XIRR reports: {str(e)}")
+                    QMessageBox.critical(
+                        self, 
+                        "Error", 
+                        f"Failed to generate XIRR reports: {str(e)}"
+                    )
+            
         except Exception as e:
-            processing_msg.close()
-            error_message = f"Error generating XIRR: {e}"
-            print(error_message)
-            QMessageBox.critical(self, "Error", error_message)
-            return None
+            self.log(f"Error in gen_xirr: {str(e)}")
+            QMessageBox.critical(
+                self, 
+                "Error", 
+                f"XIRR generation failed: {str(e)}\n\n"
+                f"Common issues:\n"
+                f"1. Check file paths and format\n"
+                f"2. Validate client codes format\n"
+                f"3. Verify date formats"
+            )
+     
+    def process_single_xirr(self, client_code):
+        try:
+            file_path, _ = QFileDialog.getOpenFileName(self, "Select Client Data File", 
+                                                       "", "Excel Files (*.xlsx *.xls)")
+            if not file_path:
+                return
+
+            df = pd.read_excel(file_path)
+            code_col = next(col for col in df.columns if 'client' in col.lower() or 'code' in col.lower())
+            init_val_col = next(col for col in df.columns if 'initial' in col.lower() and 'value' in col.lower())
+            start_date_col = next(col for col in df.columns if 'start date' in col.lower())
+            
+            client_data = df[df[code_col] == client_code].iloc[0]
+            init_val = client_data[init_val_col]
+            start_date = pd.to_datetime(client_data[start_date_col]).date()
+            
+            consolidated_path = os.path.join(self.dl_folder, "Consolidated_Holdings.xlsx")
+            if not os.path.exists(consolidated_path):
+                QMessageBox.critical(self, "Error", "Consolidated_Holdings.xlsx not found!")
+                return
+                
+            consolidated_df = pd.read_excel(consolidated_path)
+            curr_val_col = next(col for col in consolidated_df.columns if 'portfolio value' in col.lower())
+            curr_val = consolidated_df.loc[consolidated_df[code_col] == client_code, curr_val_col].values[0]
+            
+            reply = QMessageBox.question(
+                self,
+                "Download MF Transactions",
+                f"Do you want to download MF transactions for {client_code}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.status_lbl.setText(f"Downloading MF transactions for {client_code}...")
+                success, _ = self.scraper.process_all_clients_mf_trans([client_code], self.update_sum)
+                self._convert_mf_excel_to_csv()
+                self._convert_ledger_files()
+            
+            result = proc(cl_code=client_code, init_val=init_val, curr_val=curr_val, start_date=start_date)
+            QMessageBox.information(self, "Success", f"XIRR report generated:\n{result}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Single client XIRR failed: {str(e)}") 
      
     def closeEvent(self, event):
         if self.scraper:

@@ -227,7 +227,12 @@ def excel_generator(df, df2):
                         top=Side(style='thin'), bottom=Side(style='thin'))
 
     row = 5
-    ws.cell(row=row + 2, column=1, value="EQUITY").font = Font(bold=True)
+    equity_heading_row = row + 2
+    ws.cell(row=equity_heading_row, column=1, value="EQUITY").font = Font(bold=True)
+
+    ws.cell(row=equity_heading_row, column=7, value="% Alloc")
+    ws.cell(row=equity_heading_row, column=7).font = Font(bold=True)
+    ws.cell(row=equity_heading_row, column=7).alignment = Alignment(horizontal="center")
 
     row_portfolio = row - 1  
     row_cash = row_portfolio + 1
@@ -251,7 +256,7 @@ def excel_generator(df, df2):
     ws.cell(row=row_cash, column=1).alignment = Alignment(horizontal="left")
     
     ws.merge_cells(f'B{row_cash}')
-    ws.cell(row=row_cash, column=2, value=0)  
+    ws.cell(row=row_cash, column=2, value=available_cash)  
     ws.cell(row=row_cash, column=2).border = thin_border
     ws.cell(row=row_cash, column=2).alignment = Alignment(horizontal="center")
     ws.cell(row=row_cash, column=2).number_format = '#,##,##0'
@@ -656,11 +661,11 @@ def excel_generator(df, df2):
     ws.cell(row=row, column=right_pnl_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
     ws.cell(row=row, column=right_pnl_col).number_format = '#,##,##0'
 
-    ws.cell(row=row, column=right_alloc_col, value=f"={right_market_col_letter}{row}/B4*100")
-    ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=right_alloc_col).border = thin_border
-    ws.cell(row=row, column=right_alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
-    ws.cell(row=row, column=right_alloc_col).number_format = "0.00\%"    
+    ws.cell(row=row, column=col_offset + 6, value=f"={right_market_col_letter}{row}/B4*100")
+    ws.cell(row=row, column=col_offset + 6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=col_offset + 6).border = thin_border
+    ws.cell(row=row, column=col_offset + 6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=col_offset + 6).number_format = "0.00\%"    
         
     row += 1
 
@@ -745,11 +750,11 @@ def excel_generator(df, df2):
     ws.cell(row=row, column=right_mf_pnl_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
     ws.cell(row=row, column=right_mf_pnl_col).number_format = '#,##,##0'
 
-    ws.cell(row=row, column=right_alloc_col, value=f"={right_mf_market_letter}{row}/B4*100")
-    ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=right_alloc_col).border = thin_border
-    ws.cell(row=row, column=right_alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
-    ws.cell(row=row, column=right_alloc_col).number_format = "0.00\%"
+    ws.cell(row=row, column=col_offset + 6, value=f"={right_mf_market_letter}{row}/B4*100")
+    ws.cell(row=row, column=col_offset + 6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=col_offset + 6).border = thin_border
+    ws.cell(row=row, column=col_offset + 6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=col_offset + 6).number_format = "0.00\%"
     
     row += 1
 
@@ -831,11 +836,11 @@ def excel_generator(df, df2):
     ws.cell(row=row, column=bond_pnl_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
     ws.cell(row=row, column=bond_pnl_col).number_format = '#,##,##0'
 
-    ws.cell(row=row, column=right_alloc_col, value=f"={bond_market_letter}{row}/B4*100")
-    ws.cell(row=row, column=right_alloc_col).alignment = Alignment(horizontal="center")
-    ws.cell(row=row, column=right_alloc_col).border = thin_border
-    ws.cell(row=row, column=right_alloc_col).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
-    ws.cell(row=row, column=right_alloc_col).number_format = "0.00\%"
+    ws.cell(row=row, column=col_offset + 6, value=f"={bond_market_letter}{row}/B4*100")
+    ws.cell(row=row, column=col_offset + 6).alignment = Alignment(horizontal="center")
+    ws.cell(row=row, column=col_offset + 6).border = thin_border
+    ws.cell(row=row, column=col_offset + 6).fill = PatternFill(start_color="FFCC99", end_color="FFCC99", fill_type="solid")
+    ws.cell(row=row, column=col_offset + 6).number_format = "0.00\%"
         
     row += 2
 
@@ -856,12 +861,31 @@ def excel_generator(df, df2):
     
     ws.cell(row=row_cash, column=2, value=0)
     
-    for asset_type, (col, row_num) in market_value_total_rows.items():
-        col_letter = get_column_letter(col)
-        alloc_col = 7 if col < 9 else 16  
-        alloc_formula = f"={col_letter}{row_num}/B{row_total}*100"
-        ws.cell(row=row_num, column=alloc_col).value = alloc_formula
-        
+    equity_components_rows = [direct_equity_total_row, etf_equity_total_row, equity_mf_total_row]
+    equity_alloc_formula_parts = []
+    for row_num in equity_components_rows:
+        equity_alloc_formula_parts.append(f"G{row_num}")
+    
+    equity_alloc_formula = "=" + "+".join(equity_alloc_formula_parts)
+    ws.cell(row=7, column=6, value="% Alloc")
+    ws.cell(row=7, column=6).font = Font(bold=True)
+    ws.cell(row=7, column=6).alignment = Alignment(horizontal="center")
+    ws.cell(row=equity_heading_row, column=7, value=equity_alloc_formula)
+    ws.cell(row=equity_heading_row, column=7).number_format = "0.00\%"
+    
+    debt_components_rows = [debt_etf_total_row, debt_mf_total_row, bond_total_row]
+    debt_alloc_formula_parts = []
+    for row_num in debt_components_rows:
+        debt_alloc_formula_parts.append(f"O{row_num}")
+    
+    debt_alloc_formula = "=" + "+".join(debt_alloc_formula_parts)
+    ws.cell(row=7, column=col_offset + 5, value="% Alloc")
+    ws.cell(row=7, column=col_offset + 5).font = Font(bold=True)
+    ws.cell(row=7, column=col_offset + 5).alignment = Alignment(horizontal="center")
+    ws.cell(row=7, column=col_offset + 6, value=debt_alloc_formula)
+    ws.cell(row=7, column=col_offset + 6).number_format = "0.00\%"
+    
+    
     wb.formula_attributes = {'calculate': 'on_load'}
     
     output_filename = f"{client_code}_Portfolio.xlsx"

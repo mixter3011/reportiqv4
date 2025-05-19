@@ -13,10 +13,10 @@ def mk_dir(path):
         try:
             os.makedirs(path)
         except Exception as e:
-            print(f"{path}:{e}")
+            pass
     return path
 
-def conv(file, op = None):
+def conv(file, op=None):
     try:
         if op is None:
             op = os.path.splitext(file)[0] + '.csv'
@@ -24,8 +24,7 @@ def conv(file, op = None):
         df = pd.read_excel(file)
         df.to_csv(op, index=False)
         return op
-    except Exception as e:
-        print(f"Excel conversion error: {e}")
+    except Exception:
         return None
     
 def get_files(code):
@@ -44,26 +43,13 @@ def get_files(code):
     ldg_f = sorted(ldg_fs)[-1] if ldg_fs else None
     mf_f = sorted(mf_fs)[-1] if mf_fs else None
     
-    print(f"Files for client {code}:")
-    print(f"  Ledger: {ldg_f}")
-    print(f"  MF Transaction: {mf_f}")
-    
-    if not ldg_fs:
-        print(f"No ledger files found in: {ldg_dir}")
-        print(f"Searched patterns: {ldg_pat_lower} and {ldg_pat_upper}")
-    
-    if not mf_fs:
-        print(f"No MF transaction files found in: {mf_dir}")
-        print(f"Searched pattern: {mf_pat}")
-    
     return ldg_f, mf_f
 
-def get_all():
+def get_all_codes():
     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
     ldg_dir = os.path.join(desktop, 'Ledger')
     
     if not os.path.exists(ldg_dir):
-        print(f"Ledger directory not found: {ldg_dir}")
         return []
     
     ldg_files_lower = glob.glob(os.path.join(ldg_dir, "*_ledger*.csv"))
@@ -77,34 +63,107 @@ def get_all():
         if len(parts) > 0:
             codes.add(parts[0])
     
-    print(f"Found {len(codes)} client codes: {codes}")
     return list(codes)
 
 def parse_float(value):
-    if isinstance(value, (int, float)):
-        return float(value)
-    elif isinstance(value, str):
-        return float(value.replace(',', ''))
-    else:
+    try:
+        if pd.isna(value) or value == '':
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        cleaned = ''.join(c for c in str(value) 
+                        if c.isdigit() or c in {'.', '-'})
+        return float(cleaned) if cleaned else 0.0
+    except Exception:
         return 0.0
 
-def calculate_xirr(values, dates, guess=0.1):
+def calc_xirr(values, dates, guess=0.1):
+    if len(values) < 2:
+        return None
+        
+    if not (any(v > 0 for v in values) and any(v < 0 for v in values)):
+        return None
+    
     try:
         dates = [pd.to_datetime(d) for d in dates]
         days = [(d - dates[0]).days for d in dates]
         
-        def xnpv(rate):
-            return sum(values[i] / (1 + rate) ** (days[i] / 365.0) for i in range(len(values)))
+        if len(set(days)) < len(days):
+            day_value_map = {}
+            
+            for i, day in enumerate(days):
+                if day in day_value_map:
+                    day_value_map[day] += values[i]
+                else:
+                    day_value_map[day] = values[i]
+            
+            days = sorted(day_value_map.keys())
+            values = [day_value_map[day] for day in days]
         
-        result = optimize.newton(lambda r: xnpv(r), guess)
-        return result
-    except Exception as e:
-        print(f"Python XIRR calculation error: {e}")
+        def xnpv(rate):
+            result = 0
+            for i in range(len(values)):
+                result += values[i] / (1 + rate) ** (days[i] / 365.0)
+            return result
+            
+        def xnpv_derivative(rate):
+            result = 0
+            for i in range(len(values)):
+                d = days[i] / 365.0
+                result -= d * values[i] / ((1 + rate) ** (d + 1))
+            return result
+        
+        try:
+            left, right = -0.999, 9.0  
+            
+            if xnpv(left) * xnpv(right) > 0:
+                result = optimize.newton(xnpv, guess, xnpv_derivative, 
+                                         maxiter=1000, tol=1.48e-08, disp=False)
+            else:
+                result = optimize.brentq(xnpv, left, right, 
+                                         xtol=1.48e-08, rtol=1.48e-08, maxiter=1000)
+            
+            return result
+        except Exception:
+            guesses = [0.1, 0.05, 0.01, 0.2, 0.3, -0.1, -0.2, 0.5, -0.5]
+            
+            for guess in guesses:
+                try:
+                    result = optimize.newton(xnpv, guess, xnpv_derivative,
+                                             maxiter=1000, tol=1.48e-08, disp=False)
+                    if abs(xnpv(result)) < 1e-6:  
+                        return result
+                except Exception:
+                    continue
+                    
+        def secant_method(f, x0, x1, tol=1.48e-8, max_iter=1000):
+            f_x0 = f(x0)
+            f_x1 = f(x1)
+            
+            for i in range(max_iter):
+                if abs(f_x1) < tol:
+                    return x1
+                if abs(f_x1 - f_x0) < 1e-10:  
+                    x0, x1 = x1, x1 * 1.1 + 0.01
+                    f_x0, f_x1 = f_x1, f(x1)
+                    continue
+                    
+                x_new = x1 - f_x1 * (x1 - x0) / (f_x1 - f_x0)
+                x0, x1 = x1, x_new
+                f_x0, f_x1 = f_x1, f(x1)
+                
+            return None  
+            
+        result = secant_method(xnpv, 0.1, 0.2)
+        if result is not None:
+            return result
+                    
+        return None
+    except Exception:
         return None
 
-def process_ledger_data(ldg, start_date, today_date):
-    print("Processing Ledger data...")
-    ledger_transactions = []
+def process_ldg(ldg, start_date, today_date):
+    ldg_trans = []
     credit_col = None
     debit_col = None
     
@@ -116,9 +175,6 @@ def process_ledger_data(ldg, start_date, today_date):
             debit_col = col
     
     if credit_col is None or debit_col is None:
-        print(f"Warning: Credit or Debit columns not found. Credit: {credit_col}, Debit: {debit_col}")
-        print("Will use balance column as fallback.")
-        
         bal_col = None
         for col in ldg.columns:
             if 'balance' in str(col).lower():
@@ -126,28 +182,21 @@ def process_ledger_data(ldg, start_date, today_date):
                 break
         
         if bal_col is None:
-            print("Balance column not found. Using first numeric column.")
             for col in ldg.columns:
                 if pd.api.types.is_numeric_dtype(ldg[col]):
                     bal_col = col
-                    print(f"Using {col} as balance column.")
                     break
         
         if bal_col is None:
-            print("No suitable balance column found. Using 0.")
             first_bal = 0
         else:
             try:
                 first_bal = ldg[bal_col].iloc[0]
                 if pd.isna(first_bal):
-                    print("First balance is NaN, using 0")
                     first_bal = 0
-            except Exception as e:
-                print(f"Error getting first balance: {e}")
+            except Exception:
                 first_bal = 0
     else:
-        print(f"Found Credit column: {credit_col} and Debit column: {debit_col}")
-        
         bal_col = None
         for col in ldg.columns:
             if 'balance' in str(col).lower():
@@ -164,8 +213,6 @@ def process_ledger_data(ldg, start_date, today_date):
             except:
                 first_bal = 0
     
-    print(f"First balance from ledger: {first_bal}")
-    
     vch_type_col = None
     eff_date_col = None
     
@@ -180,21 +227,17 @@ def process_ledger_data(ldg, start_date, today_date):
         for col in ldg.columns:
             if 'type' in str(col).lower():
                 vch_type_col = col
-                print(f"Using {col} as voucher type column")
                 break
     
     if eff_date_col is None:
         for col in ldg.columns:
             if 'date' in str(col).lower():
                 eff_date_col = col
-                print(f"Using {col} as effective date column")
                 break
     
     if vch_type_col is not None and eff_date_col is not None:
         try:
             vch_vals = ldg[vch_type_col].unique()
-            print(f"Unique voucher types: {vch_vals}")
-            
             pay_vals = [v for v in vch_vals if 'pay' in str(v).lower()]
             
             if pay_vals:
@@ -206,13 +249,10 @@ def process_ledger_data(ldg, start_date, today_date):
                 try:
                     pay_df[eff_date_col] = pd.to_datetime(pay_df[eff_date_col], errors='coerce')
                     pay_df = pay_df.sort_values(by=eff_date_col, ascending=True)
-                    print(f"Sorted transactions by date (ascending order - oldest first)")
-                except Exception as e:
-                    print(f"Error sorting by date: {e}")
+                except Exception:
+                    pass
             
-            print(f"Found {len(pay_df)} transactions to process from ledger")
-            
-            for idx, row in pay_df.iterrows():
+            for _, row in pay_df.iterrows():
                 try:
                     vch_type = str(row[vch_type_col])
                     
@@ -250,241 +290,224 @@ def process_ledger_data(ldg, start_date, today_date):
                         else:
                             value = 0
                     
-                    ledger_transactions.append([eff_date, value, vch_type])
-                except Exception as e:
-                    print(f"Error processing ledger row {idx}: {e}")
-        except Exception as e:
-            print(f"Error processing ledger data: {e}")
-    else:
-        print("Required columns not found in ledger. Skipping ledger processing.")
+                    ldg_trans.append([eff_date, value, vch_type])
+                except Exception:
+                    pass
+        except Exception:
+            pass
     
-    return ledger_transactions
+    return ldg_trans, bal_col
 
-def process_mf_data(mft, today_date):
-    print("Processing MF Transaction data...")
-    mf_transactions = []
-    tr_type_col = None
-    tr_date_col = None
-    tr_val_col = None
+def process_mf(mft, today_date):
+    mf_trans = []
     
-    for col in mft.columns:
-        if 'unnamed' in str(col).lower():
-            try:
-                for idx, val in enumerate(mft[col]):
-                    if isinstance(val, str) and 'transaction type' in val.lower():
-                        tr_type_col = col
-                        
-                        try:
-                            tr_date_col = mft.columns[0]  
-                            tr_val_col = mft.columns[6]   
-                            print(f"Found MF columns: Type={tr_type_col}, Date={tr_date_col}, Value={tr_val_col}")
-                            break
-                        except Exception as e:
-                            print(f"Error setting MF columns: {e}")
-                if tr_type_col is not None:
-                    break
-            except Exception as e:
-                print(f"Error checking column {col}: {e}")
-    
-    if tr_type_col is None:
-        for col in mft.columns:
-            col_low = str(col).lower()
-            if 'type' in col_low and ('trans' in col_low or 'action' in col_low):
-                tr_type_col = col
-            elif 'date' in col_low:
-                tr_date_col = col
-            elif 'value' in col_low or 'amount' in col_low:
-                tr_val_col = col
-    
-    if tr_type_col is not None and tr_date_col is not None and tr_val_col is not None:
+    if 'Transaction Date' in mft.columns:
         try:
-            found_header = False
-            header_idx = -1
-            
-            if 'unnamed' in str(tr_type_col).lower():
-                for idx, val in enumerate(mft[tr_type_col]):
-                    if isinstance(val, str) and 'transaction type' in val.lower():
-                        found_header = True
-                        header_idx = idx
+            for _, row in mft.iterrows():
+                try:
+                    if pd.isna(row['Transaction Date']) or 'Total' in str(row['Transaction Date']):
                         continue
                     
-                    if found_header and idx > header_idx and not pd.isna(val):
-                        if isinstance(val, str) and ('buy' in val.lower() or 'sell' in val.lower()):
-                            try:
-                                tr_date = mft.iloc[idx][tr_date_col]
-                                tr_value = mft.iloc[idx][tr_val_col]
-                                
-                                if not pd.isna(tr_date) and not pd.isna(tr_value):
-                                    try:
-                                        tr_date = pd.to_datetime(tr_date).date()
-                                    except:
-                                        tr_date = today_date
-                                        
-                                    try:
-                                        tr_value = parse_float(tr_value)
-                                    except:
-                                        tr_value = 0
-                                        
-                                    is_buy = 'buy' in val.lower()
-                                    rem = 'MF BUY' if is_buy else 'MF SELL'
-                                    
-                                    if is_buy:
-                                        tr_value = -abs(tr_value)
-                                    else:
-                                        tr_value = abs(tr_value)
-                                    
-                                    mf_transactions.append([tr_date, tr_value, rem])
-                                    print(f"Added MF transaction: {tr_date} - {tr_value} - {rem}")
-                            except Exception as e:
-                                print(f"Error processing MF row {idx}: {e}")
-            else:
-                tr_types = mft[tr_type_col].unique()
-                print(f"Unique transaction types: {tr_types}")
-                
-                bs_vals = [v for v in tr_types if 'buy' in str(v).lower() or 'sell' in str(v).lower()]
-                
-                if bs_vals:
-                    mf_trans = mft[mft[tr_type_col].isin(bs_vals)]
-                else:
-                    mf_trans = mft.copy()
-                
-                if tr_date_col in mf_trans.columns:
-                    try:
-                        mf_trans[tr_date_col] = pd.to_datetime(mf_trans[tr_date_col], errors='coerce')
-                        mf_trans = mf_trans.sort_values(by=tr_date_col, ascending=True)
-                        print(f"Sorted MF transactions by date (ascending order - oldest first)")
-                    except Exception as e:
-                        print(f"Error sorting MF transactions by date: {e}")
-                
-                print(f"Found {len(mf_trans)} transactions to process from MF")
-                
-                for idx, row in mf_trans.iterrows():
-                    try:
-                        tr_type = str(row[tr_type_col])
+                    tr_date = pd.to_datetime(row['Transaction Date'], errors='coerce').date()
+                    tr_value = parse_float(row['Transaction Value'])
+                    tr_type = str(row['Transaction Type']).lower() if 'Transaction Type' in row else ''
+                    
+                    if 'buy' in tr_type:
+                        mf_trans.append([tr_date, -abs(tr_value), 'MF BUY'])
+                    elif 'sell' in tr_type:
+                        mf_trans.append([tr_date, abs(tr_value), 'MF SELL'])
                         
-                        tr_date = row[tr_date_col]
-                        if isinstance(tr_date, str):
-                            try:
-                                tr_date = pd.to_datetime(tr_date).date()
-                            except:
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    elif 'Unnamed: 3' in mft.columns and 'Unnamed: 6' in mft.columns:
+        try:
+            date_col = 'Unnamed: 0'
+                
+            for _, row in mft.iterrows():
+                try:
+                    if pd.isna(row['Unnamed: 3']):
+                        continue
+                    
+                    tr_type = str(row['Unnamed: 3']).lower()
+                    
+                    if 'buy' not in tr_type and 'sell' not in tr_type:
+                        continue
+                    
+                    tr_value = parse_float(row['Unnamed: 6'])
+                    
+                    if date_col:
+                        try:
+                            tr_date = pd.to_datetime(row[date_col], errors='coerce').date()
+                            if pd.isna(tr_date):
                                 tr_date = today_date
+                        except:
+                            tr_date = today_date
+                    else:
+                        tr_date = today_date
+                    
+                    if 'buy' in tr_type:
+                        mf_trans.append([tr_date, -abs(tr_value), 'MF BUY'])
+                    elif 'sell' in tr_type:
+                        mf_trans.append([tr_date, abs(tr_value), 'MF SELL'])
                         
-                        tr_val = parse_float(row[tr_val_col])
-                        
-                        is_buy = 'buy' in tr_type.lower()
-                        rem = 'MF BUY' if is_buy else 'MF SELL'
-                        
-                        if is_buy:
-                            tr_val = -abs(tr_val)
-                        else:
-                            tr_val = abs(tr_val)
-                        
-                        mf_transactions.append([tr_date, tr_val, rem])
-                    except Exception as e:
-                        print(f"Error processing MF row {idx}: {e}")
-        except Exception as e:
-            print(f"Error processing MF transactions: {e}")
+                except Exception:
+                    pass
+                    
+        except Exception:
+            pass
     else:
-        print("Required columns not found in MF data. Skipping MF processing.")
-    
-    return mf_transactions
+        col_map = {
+            'type': ['transaction type', 'tr type', 'type'],
+            'date': ['date', 'tr date', 'effective date'],
+            'value': ['amount', 'value', 'nav']
+        }
         
-def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=None):
-    print("Ledger columns:", ldg.columns.tolist())
-    print("MF Transaction columns:", mft.columns.tolist())
+        cols = {}
+        for col_type, keywords in col_map.items():
+            for col in mft.columns:
+                if any(kw in str(col).lower() for kw in keywords):
+                    cols[col_type] = col
+                    break
+
+        if not all(cols.get(k) for k in ['type', 'date', 'value']):
+            return mf_trans
+
+        try:
+            mft = mft.rename(columns={
+                cols['type']: 'TransactionType',
+                cols['date']: 'Date',
+                cols['value']: 'Value'
+            })
+            
+            for _, row in mft.iterrows():
+                try:
+                    tr_date = pd.to_datetime(row['Date'], errors='coerce').date()
+                    tr_value = parse_float(row['Value'])
+                    tr_type = str(row['TransactionType']).lower()
+                    
+                    if 'buy' in tr_type:
+                        mf_trans.append([tr_date, -abs(tr_value), 'MF BUY'])
+                    elif 'sell' in tr_type:
+                        mf_trans.append([tr_date, abs(tr_value), 'MF SELL'])
+                        
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
     
+    return mf_trans
+
+def get_curr_val(code, ldg):
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    cons_path = os.path.join(desktop, "Holding", "Consolidated_Holdings.xlsx")
+    
+    holdings_val = None
+    
+    if os.path.exists(cons_path):
+        try:
+            cons_df = pd.read_excel(cons_path)
+            
+            code_col = None
+            for col in cons_df.columns:
+                if 'client' in str(col).lower() or 'code' in str(col).lower():
+                    code_col = col
+                    break
+            
+            val_col = None
+            for col in cons_df.columns:
+                if 'portfolio value' in str(col).lower() or 'port val' in str(col).lower():
+                    val_col = col
+                    break
+            
+            if code_col and val_col:
+                code_rows = cons_df[cons_df[code_col].astype(str).str.strip() == str(code).strip()]
+                if not code_rows.empty:
+                    holdings_val = parse_float(code_rows.iloc[0][val_col])
+        except Exception:
+            pass
+    
+    bal_col = None
+    ledger_bal = 0
+    
+    for col in ldg.columns:
+        if 'balance' in str(col).lower():
+            bal_col = col
+            break
+    
+    if bal_col:
+        try:
+            first_idx = ldg.index[0]
+            ledger_bal = parse_float(ldg.loc[first_idx, bal_col])
+        except Exception:
+            pass
+    
+    final_val = None
+    if holdings_val is not None:
+        final_val = holdings_val + ledger_bal
+    
+    return final_val
+
+def run_xirr(ldg, mft, init_val, curr_val, out_dir=None, code=None, start_date=None):
     if start_date is None:
         today = datetime.now()
         start_date = datetime(today.year - 1, today.month, today.day).date()
-        print(f"Using default start date (one year ago): {start_date.strftime('%d/%m/%Y')}")
     
     initial_date = start_date
     today_date = datetime.now().date()
     
-    print(f"Initial portfolio date: {initial_date.strftime('%d/%m/%Y')}")
-    print(f"Current date: {today_date.strftime('%d/%m/%Y')}")
-    
-    print(f"Initial portfolio value: {init_val}")
-    print(f"Current portfolio value: {curr_val}")
-    
-    
     res_df = pd.DataFrame(columns=['Date', 'Fund', 'Remarks'])
-    
     
     res_df.loc[0] = [initial_date, -abs(init_val), 'Initial Value']
     
+    ldg_trans, _ = process_ldg(ldg, start_date, today_date)
     
-    ledger_trans = process_ledger_data(ldg, start_date, today_date)
+    mf_trans = process_mf(mft, today_date)
     
-    
-    mf_trans = process_mf_data(mft, today_date)
-    
-    
-    for idx, (date, value, remark) in enumerate(ledger_trans):
+    for date, value, remark in ldg_trans:
         new_idx = len(res_df)
         res_df.loc[new_idx] = [date, value, remark]
     
-    
-    for idx, (date, value, remark) in enumerate(mf_trans):
+    for date, value, remark in mf_trans:
         new_idx = len(res_df)
         res_df.loc[new_idx] = [date, value, remark]
-    
     
     new_idx = len(res_df)
     res_df.loc[new_idx] = [today_date, abs(curr_val), 'Current Value']
-    
-    print("\nGenerated transactions table:")
-    print(res_df)
-    
     
     res_df_xl = res_df.copy()
     res_df_xl['Date'] = pd.to_datetime(res_df_xl['Date'], errors='coerce')
     res_df_xl['Fund'] = pd.to_numeric(res_df_xl['Fund'], errors='coerce')
     
+    res_df_xl = res_df_xl.dropna(subset=['Date', 'Fund'])
     
     res_df_xl_sorted = res_df_xl.sort_values(by='Date', ascending=True)
-    print("\nSorted transaction table for XIRR calculation (oldest first):")
-    print(res_df_xl_sorted)
-    
-    
-    res_df_xl_sorted = res_df_xl_sorted.dropna(subset=['Date', 'Fund'])
-    
     
     has_positive = (res_df_xl_sorted['Fund'] > 0).any()
     has_negative = (res_df_xl_sorted['Fund'] < 0).any()
-    
-    if not (has_positive and has_negative):
-        print("\nWARNING: XIRR calculation requires both positive and negative cash flows")
-        print(f"Has positive cash flows: {has_positive}, Has negative cash flows: {has_negative}")
-    else:
-        print("\nData has both positive and negative cash flows, XIRR calculation should work")
-    
     
     python_xirr = None
     try:
         values = res_df_xl_sorted['Fund'].tolist()
         dates = res_df_xl_sorted['Date'].tolist()
-        python_xirr = calculate_xirr(values, dates)
-        print(f"\nPython calculated XIRR: {python_xirr:.2%}" if python_xirr is not None else "\nCould not calculate Python XIRR")
-    except Exception as e:
-        print(f"\nError calculating Python XIRR: {e}")
+        python_xirr = calc_xirr(values, dates)
+    except Exception:
+        pass
     
     try:
         try:
             import xlsxwriter
         except ImportError:
-            print("\nWarning: xlsxwriter module not found. You need to install it:")
-            print("pip install xlsxwriter")
-            print("Saving to CSV instead...")
-            
             desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-            xirr_reports_dir = os.path.join(desktop, "xirr_reports")
-            mk_dir(xirr_reports_dir)
+            reports_dir = os.path.join(desktop, "xirr_reports")
+            mk_dir(reports_dir)
             
-            if cl_code:
-                out_file = os.path.join(xirr_reports_dir, f"{cl_code}_xirr_report.csv")
+            if code:
+                out_file = os.path.join(reports_dir, f"{code}_xirr_report.csv")
             else:
-                out_file = os.path.join(xirr_reports_dir, "xirr_report.csv")
+                out_file = os.path.join(reports_dir, "xirr_report.csv")
                 
             res_df_xl['Date'] = res_df_xl['Date'].dt.strftime('%d/%m/%Y')
             if python_xirr is not None:
@@ -495,20 +518,18 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
             else:
                 res_df_xl.to_csv(out_file, index=False)
                 
-            print(f"Analysis saved to {out_file}")
             return out_file
             
         desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-        xirr_reports_dir = os.path.join(desktop, "xirr_reports")
-        mk_dir(xirr_reports_dir)  
+        reports_dir = os.path.join(desktop, "xirr_reports")
+        mk_dir(reports_dir)  
         
-        if cl_code:
-            out_file = os.path.join(xirr_reports_dir, f"{cl_code}_xirr_report.xlsx")
+        if code:
+            out_file = os.path.join(reports_dir, f"{code}_xirr_report.xlsx")
         else:
-            out_file = os.path.join(xirr_reports_dir, "xirr_report.xlsx")
+            out_file = os.path.join(reports_dir, "xirr_report.xlsx")
         
         with pd.ExcelWriter(out_file, engine='xlsxwriter') as writer:
-            
             res_df_xl['Date'] = res_df_xl['Date'].dt.strftime('%d/%m/%Y')
             res_df_xl.to_excel(writer, sheet_name='Portfolio Analysis', index=False)
             
@@ -516,7 +537,6 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
             worksheet = writer.sheets['Portfolio Analysis']
             
             row_count = len(res_df_xl)
-            
             
             date_format = workbook.add_format({'num_format': 'dd/mm/yyyy'})
             worksheet.set_column('A:A', 20, date_format)  
@@ -527,21 +547,18 @@ def main(ldg, mft, init_val, curr_val, out_dir=None, cl_code=None, start_date=No
             
             second_last_row = row_count + 1  
             if second_last_row >= 2:  
-                
-                xirr_formula = f'=IFERROR(XIRR(B2:B{second_last_row},A2:A{second_last_row}), "Could not calculate")'
+                xirr_formula = f'=XIRR(B2:B{second_last_row},A2:A{second_last_row})'
                 
                 worksheet.write(row_count + 1, 0, 'XIRR Calculation')
                 worksheet.write(row_count + 1, 1, 'XIRR Value')
                 
                 worksheet.write_formula(row_count + 1, 2, xirr_formula, percent_format)
             
-        print(f"Analysis saved to {out_file}")
         return out_file
-    except Exception as e:
-        print(f"Error saving file: {e}")
+    except Exception:
         return "Error saving results"
 
-def process_directory(mf_dir, init_val, curr_val, start_date=None):
+def proc_dir(mf_dir, init_val, start_date=None):
     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
     ledger_dir = os.path.join(desktop, 'Ledger')
     results = []
@@ -549,7 +566,7 @@ def process_directory(mf_dir, init_val, curr_val, start_date=None):
     for mf_file in glob.glob(os.path.join(mf_dir, "*.xlsx")) + glob.glob(os.path.join(mf_dir, "*.xls")):
         csv_file = conv(mf_file)
         if csv_file:
-            print(f"Converted {mf_file} to {csv_file}")
+            pass
     
     for mf_file in glob.glob(os.path.join(mf_dir, "*.csv")):
         try:
@@ -557,32 +574,32 @@ def process_directory(mf_dir, init_val, curr_val, start_date=None):
             ledger_files = glob.glob(os.path.join(ledger_dir, f"{code}_Ledger*"))
             
             if not ledger_files:
-                print(f"Skipping {code} - no ledger file")
                 continue
                 
-            ledger_df = pd.read_csv(ledger_files[0])
+            ldg_df = pd.read_csv(ledger_files[0])
             mf_df = pd.read_csv(mf_file)
             
-            out_file = main(ledger_df, mf_df, init_val, curr_val, 
-                           cl_code=code, start_date=start_date)
+            curr_val = get_curr_val(code, ldg_df)
+            
+            if curr_val is None:
+                curr_val = init_val
+            
+            out_file = run_xirr(ldg_df, mf_df, init_val, curr_val, 
+                           code=code, start_date=start_date)
             results.append(out_file)
-        except Exception as e:
-            print(f"Error processing {mf_file}: {str(e)}")
+        except Exception:
+            pass
     
     return results
 
-def proc(cl_code=None, init_val=100000, curr_val=None, start_date=None, input_dir=None):
-    if curr_val is None:
-        curr_val = init_val 
-    
+def proc(code=None, init_val=100000, start_date=None, input_dir=None):
     if input_dir: 
-        return process_directory(input_dir, init_val, curr_val, start_date)
+        return proc_dir(input_dir, init_val, start_date)
     
-    if cl_code:
-        ldg_f, mf_f = get_files(cl_code)
+    if code:
+        ldg_f, mf_f = get_files(code)
         
         if not all([ldg_f, mf_f]):
-            print(f"Error: Missing files for client {cl_code}")
             return None
         
         mf_csv = conv(mf_f)
@@ -590,23 +607,26 @@ def proc(cl_code=None, init_val=100000, curr_val=None, start_date=None, input_di
         ldg_df = pd.read_csv(ldg_f)
         mf_df = pd.read_csv(mf_csv)
         
-        out_file = main(ldg_df, mf_df, init_val, curr_val, cl_code=cl_code, start_date=start_date)
+        curr_val = get_curr_val(code, ldg_df)
+        
+        if curr_val is None:
+            curr_val = init_val
+        
+        out_file = run_xirr(ldg_df, mf_df, init_val, curr_val, code=code, start_date=start_date)
         
         return out_file
     else:
-        cl_codes = get_all()
+        codes = get_all_codes()
         out_files = []
         
         desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-        xirr_reports_dir = os.path.join(desktop, "xirr reports")
-        mk_dir(xirr_reports_dir)  
+        reports_dir = os.path.join(desktop, "xirr_reports")
+        mk_dir(reports_dir)  
         
-        for code in cl_codes:
-            print(f"\nProcessing client: {code}")
+        for code in codes:
             ldg_f, mf_f = get_files(code)
             
             if not all([ldg_f, mf_f]):
-                print(f"Skipping client {code} due to missing files")
                 continue
             
             mf_csv = conv(mf_f)
@@ -615,10 +635,15 @@ def proc(cl_code=None, init_val=100000, curr_val=None, start_date=None, input_di
                 ldg_df = pd.read_csv(ldg_f)
                 mf_df = pd.read_csv(mf_csv)
                 
-                out_file = main(ldg_df, mf_df, init_val, curr_val, cl_code=code, start_date=start_date)
+                curr_val = get_curr_val(code, ldg_df)
+                
+                if curr_val is None:
+                    curr_val = init_val
+                
+                out_file = run_xirr(ldg_df, mf_df, init_val, curr_val, code=code, start_date=start_date)
                 out_files.append(out_file)
-            except Exception as e:
-                print(f"Error processing client {code}: {e}")
+            except Exception:
+                pass
         
         return out_files
     
@@ -640,25 +665,24 @@ if __name__ == "__main__":
             print(f"pip install {module}")
         print("\nContinuing anyway, but the script might fail...")
     
-    cl_code = sys.argv[1] if len(sys.argv) > 1 else None
+    code = sys.argv[1] if len(sys.argv) > 1 else None
     init_val = float(sys.argv[2]) if len(sys.argv) > 2 else 100000
-    curr_val = float(sys.argv[3]) if len(sys.argv) > 3 else init_val
     
     today = datetime.now()
     default_start_date = datetime(today.year - 1, today.month, today.day).date()
     start_date = default_start_date
     
-    if len(sys.argv) > 4:
+    if len(sys.argv) > 3:
         try:
-            start_date = datetime.strptime(sys.argv[4], '%d/%m/%Y').date()
+            start_date = datetime.strptime(sys.argv[3], '%d/%m/%Y').date()
         except:
             print(f"Invalid date format. Use DD/MM/YYYY format. Using one year ago date: {default_start_date.strftime('%d/%m/%Y')}")
     
-    if cl_code:
-        print(f"Processing data for client: {cl_code}")
-        out_file = proc(cl_code, init_val, curr_val, start_date)
+    if code:
+        print(f"Processing data for client: {code}")
+        out_file = proc(code, init_val, start_date)
         print(f"Output saved to: {out_file}")
     else:
         print("Processing data for all clients")
-        out_files = proc(init_val=init_val, curr_val=curr_val, start_date=start_date)
+        out_files = proc(init_val=init_val, start_date=start_date)
         print(f"Outputs saved to: {out_files}")

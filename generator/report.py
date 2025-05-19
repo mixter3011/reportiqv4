@@ -1,73 +1,37 @@
-import os
 import io
-import numpy as np
 import pandas as pd
-from datetime import datetime
-
+import locale
+try:
+    locale.setlocale(locale.LC_ALL, 'en_IN.UTF-8')
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+    except locale.Error:
+        locale.setlocale(locale.LC_ALL, '')
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.patches as mpatches
-import matplotlib.image as mpimg
-from matplotlib.table import Table as MplTable
-
 from reportlab.lib import colors
-from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
-from reportlab.lib.colors import HexColor, white, black, grey
-from reportlab.lib.pagesizes import letter, landscape
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.colors import HexColor, white
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageTemplate, Frame, Image, BaseDocTemplate, NextPageTemplate, PageBreak, Flowable
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, PageTemplate, Frame, Image, BaseDocTemplate, PageBreak, Flowable, KeepTogether
 
 def background(canvas, doc):
     logo_path = "/Users/sen/Desktop/reportiqv4/logo.png"
-    footer_path = "/Users/sen/Desktop/reportiqv4/footer.png"
     logo_width = 1.5 * inch
     logo_height = 0.5 * inch
-    footer_width = 5.2*inch
-    footer_height = 0.3*inch
     x1 = doc.pagesize[0] - doc.rightMargin - logo_width + 0.9 * inch
     y1 = doc.pagesize[1] - doc.topMargin + 0.4 * inch
-    x2 = doc.pagesize[0] - doc.rightMargin - footer_width + 1 * inch
-    y2 = 0.4 * inch + footer_height + 10  
-    
-    x_left_text = x2 - 2.8 * inch  
-    x_right_text = x2 - 3 * inch
-    
-    text_x = doc.leftMargin - 0.2 * inch
-    text_y = 0.4 * inch
-    
-    bottom_text_1 = "This document is not valid without disclosure, please refer to the last page for the disclaimer. | Strictly Private & Confidential."
-    bottom_text_2 = f"Incase of any query / feedback on the report, please write to query@motilaloswal.com. | Generated Date & Time : {datetime.now().strftime('%d-%b-%Y | %I:%M %p')}"
     
     canvas.saveState()
-    canvas.setFillColor(HexColor('#D6E1E8'))  
+    canvas.setFillColor(white)  
     canvas.rect(0, 0, letter[0], letter[1], fill=1)
     canvas.restoreState()
     canvas.drawImage(logo_path, x1, y1, width=logo_width, height=logo_height, preserveAspectRatio=True, mask='auto')
-    canvas.drawImage(footer_path, x2, y2, width=footer_width, height=footer_height, preserveAspectRatio=True, mask='auto')
-    canvas.drawString(x_left_text, y2 + footer_height / 2, "WINNING PORTFOLIOS")
-    canvas.setFont("Helvetica", 8)
-    canvas.drawString(text_x + 0.4*inch, text_y + 12, bottom_text_1)
-    canvas.drawString(text_x, text_y, bottom_text_2)
-    powered_text = "POWERED BY KNOWLEDGE"
-    canvas.setFont("Helvetica-Bold", 12)
 
-    text_width = canvas.stringWidth(powered_text, "Helvetica-Bold", 8)
-    text_height = 12  
-
-    text_x = x_right_text
-    text_y = y2 + footer_height / 2 - 0.2 * inch
-
-    canvas.setFillColor(HexColor("#990000"))
-    canvas.rect(text_x, text_y - 2, text_width + 58, text_height, stroke=0, fill=1)
-
-    canvas.setFillColor(white)
-    canvas.drawString(text_x + 1, text_y, powered_text)
-    
 def cover (code, name):
     cover_page = f"{name}.pdf"
     doc = BaseDocTemplate(cover_page, pagesize=letter)
@@ -84,7 +48,7 @@ def cover (code, name):
         fontSize=16,
         alignment=TA_CENTER,
         spaceAfter=12,
-        textColor=HexColor('#990000')
+        textColor=HexColor('#3C3EA8')
     )
     
     header_style = ParagraphStyle(
@@ -94,14 +58,6 @@ def cover (code, name):
         fontSize=16,
         alignment=TA_CENTER,
         spaceAfter=6
-    )
-    
-    sub_style = ParagraphStyle(
-        'NormalStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        alignment=TA_CENTER
     )
     
     normal_style = ParagraphStyle(
@@ -114,19 +70,11 @@ def cover (code, name):
 
     content = []
     content.append(Paragraph("CUSTOMER STATEMENT", title_style))
-    content.append(Spacer(1, 0.01*inch))
-    content.append(Paragraph(f"Report Level : Member | Report Period : Since Inception to {datetime.now().strftime('%d-%b-%Y')}", sub_style))    
+    content.append(Spacer(1, 0.01*inch))    
     content.append(Spacer(1, 3*inch))
     content.append(Paragraph(f"{name}", header_style))
-    content.append(Paragraph(f"UCID : {code}", normal_style))
+    content.append(Paragraph(f"{code}", normal_style))
     content.append(Spacer(1, 2*inch))
-    footer_style = ParagraphStyle(
-        'FooterStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=8,
-        alignment=TA_LEFT
-    )
     
     return doc, content
 
@@ -182,10 +130,20 @@ def overview(direct_equity_market_value, etf_equity_market_value, debt_etf_marke
         'CenteredHeaderStyle',
         parent=styles['Heading2'],
         fontName='Helvetica-Bold',
-        fontSize=16,
+        fontSize=18,
+        alignment=TA_LEFT,
+        spaceAfter=10,
+        textColor=white,
+        backColor=HexColor('#1e4388')
+    )
+    
+    client_style = ParagraphStyle(
+        'ClientStyle',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=18,
         alignment=TA_CENTER,
-        spaceAfter=6,
-        textColor=HexColor('#3C3EA8')
+        spaceAfter=10,
     )
     
     title_style = ParagraphStyle(
@@ -206,15 +164,33 @@ def overview(direct_equity_market_value, etf_equity_market_value, debt_etf_marke
             self.height = height
             
         def draw(self):
-            self.canv.setStrokeColor(HexColor('#3C3EA8'))
+            self.canv.setStrokeColor(HexColor('#1e4388'))
             self.canv.setLineWidth(self.height)
             self.canv.line(5, 0, self.width, 0)
-            
-    header_line = HorizontalLineFlowable(6*inch)  
+    
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=14,
+        alignment=TA_CENTER,
+        textColor=white,
+        backColor=HexColor('#4d7cc3')
+    )
+    
+    subheader_style = ParagraphStyle(
+        'SubHeaderStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        alignment=TA_LEFT,
+        textColor=white,
+        backColor=HexColor('#5f92d2')
+    )
     
     if client_name and client_code:
-        client_name_paragraph = Paragraph(f"{client_name}", heading)
-        client_code_paragraph = Paragraph(f"{client_code}", heading)
+        client_name_paragraph = Paragraph(f"{client_name}", client_style)
+        client_code_paragraph = Paragraph(f"{client_code}", client_style)
         client_info = [[client_name_paragraph], [client_code_paragraph]]
         client_table = Table(client_info, colWidths=[8*inch]) 
         client_table.setStyle(TableStyle([
@@ -225,106 +201,108 @@ def overview(direct_equity_market_value, etf_equity_market_value, debt_etf_marke
     else:
         content.append(Paragraph("Holding Summary & Performance", heading))
     
-    content.append(Spacer(1, 0.1*inch))
-    content.append(header_line)
-    content.append(Spacer(1, 0.5*inch))
+    content.append(Spacer(1, 0.3*inch))
     
     composition_data = []
-    composition_data.append(["Portfolio Value", f"{total_portfolio_value:,.0f}"])
+    
+    composition_data.append([
+        Paragraph("Portfolio Value", header_style), 
+        Paragraph(ist(total_portfolio_value), header_style)
+    ])
     
     if equity_total > 0:
-        composition_data.append(["Equity", f"{equity_total:,.0f}"])
+        composition_data.append(["Equity", ist(equity_total)])
     if debt_total > 0:
-        composition_data.append(["Debt", f"{debt_total:,.0f}"])
+        composition_data.append(["Debt", ist(debt_total)])
     if gold_total > 0:
-        composition_data.append(["Gold", f"{gold_total:,.0f}"])
+        composition_data.append(["Gold", ist(gold_total)])
     if available_cash > 0:
-        composition_data.append(["Available Cash", f"{available_cash:,.0f}"])
+        composition_data.append(["Available Cash", ist(available_cash)])
     
-    composition_table = Table(composition_data, colWidths=[2*inch, 2*inch])
+    composition_table = Table(composition_data, colWidths=[1.9*inch, 1.9*inch])
     composition_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#D6E1E8')), 
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#4d7cc3')),
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (-1, 1), 14),
-        ('GRID', (0, 0), (-1, -1), 1, HexColor('#D6E1E8')),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 12),
+        ('GRID', (0, 0), (-1, -1), 1, HexColor('#d6e1e8')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (0, -1), 0.1*inch),
-        ('RIGHTPADDING', (1, 0), (1, -1), 0.1*inch),
-        ('FONTSIZE', (0, 0), (-1, -1), 14),
-        ('LINEBELOW', (0, 0), (-1, -1), 0.5, HexColor('#D6E1E8')),  
+        ('LEFTPADDING', (0, 0), (0, -1), 0.2*inch),
+        ('RIGHTPADDING', (1, 0), (1, -1), 0.2*inch),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0.1*inch),
+        ('TOPPADDING', (0, 0), (-1, -1), 0.1*inch),
+        ('LINEBELOW', (0, 0), (-1, -1), 0.5, HexColor('#d6e1e8')),
     ]))
     
     cash_data = [
-        ["Cash Equivalent:", f"{cash_equivalent:,.0f}"],
-        ["Cash Equivalent %:", f"{cash_equivalent_percent:.2f}%"],
-        ["Equity Allocation %:", f"{equity_allocation_percent:.2f}%"],
+        ["Cash Equivalent:", ist(cash_equivalent)],
+        ["Cash Equivalent %:", f"{cash_equivalent_percent:.0f}%"],
+        ["Equity Allocation %:", f"{equity_allocation_percent:.0f}%"],
     ]
     
     if xirr_value is not None:
-        cash_data.append(["XIRR:", f"{xirr_value:.2f}%"])
+        cash_data.append(["XIRR:", f"{xirr_value:.0f}%"])
     
-    cash_table = Table(cash_data, colWidths=[2*inch, 2*inch])
+    cash_table = Table(cash_data, colWidths=[1.9*inch, 1.9*inch])
     cash_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (0, -1), 0.1*inch),
-        ('RIGHTPADDING', (1, 0), (1, -1), 0.1*inch),
-        ('FONTSIZE', (0, 0), (-1, -1), 14),
+        ('LEFTPADDING', (0, 0), (0, -1), 0.2*inch),
+        ('RIGHTPADDING', (1, 0), (1, -1), 0.2*inch),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0.1*inch),
+        ('TOPPADDING', (0, 0), (-1, -1), 0.1*inch),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('GRID', (0, 0), (-1, -1), 1, HexColor('#d6e1e8')),
+        ('LINEBELOW', (0, 0), (-1, -1), 0.5, HexColor('#d6e1e8')),
     ]))
     
-    left_data = [[composition_table], [Spacer(1, 0.5*inch)], [cash_table]]
-    left_col = Table(left_data, colWidths=[4*inch])
-    left_col.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (0, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (0, -1), 0),
-        ('RIGHTPADDING', (0, 0), (0, -1), 0),
-        ('TOPPADDING', (0, 0), (0, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (0, -1), 0),
+    pie_title = Paragraph("Portfolio Composition", header_style)
+    
+    pie_title_table = Table([[pie_title]], colWidths=[8*inch])
+    pie_title_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), HexColor('#4d7cc3')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0.1*inch),
+        ('TOPPADDING', (0, 0), (-1, -1), 0.1*inch),
     ]))
     
-    class VerticalLineFlowable(Flowable):
-        def __init__(self, height):
-            Flowable.__init__(self)
-            self.height = height
-            
-        def draw(self):
-            self.canv.setStrokeColor(HexColor('#000000'))
-            self.canv.line(15, 15, 15, self.height)
-    
-    divider = VerticalLineFlowable(3.3*inch)
-    
-    right_content = []
-    pie_title = Paragraph("Portfolio Composition", title_style)
-    right_content.append(pie_title)
+    content.append(pie_title_table)
     
     try:
         labels = []
         sizes = []
         colors = []
+        light_blue_shades = ['#70a3e0', '#81b4ed', '#92c5fa', '#a3d6ff', '#b4e7ff',
+                           '#c5f8ff', '#d6ffff', '#e7ffff', '#f8ffff']
+        color_index = 0
         
         if equity_total > 0:
             labels.append('Equity')
             sizes.append(equity_total)
-            colors.append('#00FFFF')  
+            colors.append(light_blue_shades[color_index % len(light_blue_shades)])
+            color_index += 1
         
         if debt_total > 0:
             labels.append('Debt')
             sizes.append(debt_total)
-            colors.append('#90EE90')  
+            colors.append(light_blue_shades[color_index % len(light_blue_shades)])
+            color_index += 1
         
         if gold_total > 0:
             labels.append('Gold')
             sizes.append(gold_total)
-            colors.append('#FFCC99')  
+            colors.append(light_blue_shades[color_index % len(light_blue_shades)])
+            color_index += 1
         
         if available_cash > 0:
             labels.append('Available Cash')
             sizes.append(available_cash)
-            colors.append('#FFFFC5')  
+            colors.append(light_blue_shades[color_index % len(light_blue_shades)])
+            color_index += 1
         
         if sizes:  
             plt.figure(figsize=(7, 6), facecolor='none')
@@ -344,39 +322,33 @@ def overview(direct_equity_market_value, etf_equity_market_value, debt_etf_marke
             plt.savefig(buf, format='png', dpi=300, bbox_inches='tight', transparent=True)
             buf.seek(0)
             
-            img = Image(buf, width=4*inch, height=3*inch)
-            right_content.append(img)
+            img = Image(buf, width=6*inch, height=4*inch)
+            chart_table = Table([[img]], colWidths=[8*inch])
+            chart_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0.1*inch),
+                ('TOPPADDING', (0, 0), (-1, -1), 0.1*inch),
+            ]))
+            content.append(chart_table)
             plt.close()
             
     except Exception as e:
-        error_style = ParagraphStyle('ErrorStyle', parent=styles['Normal'], textColor=HexColor('#990000'))
-        right_content.append(Paragraph(f"Unable to generate pie chart: {str(e)}", error_style))
+        error_style = ParagraphStyle('ErrorStyle', parent=styles['Normal'], textColor=HexColor('#3C3EA8'))
+        content.append(Paragraph(f"Unable to generate pie chart: {str(e)}", error_style))
     
-    right_col = []
-    for item in right_content:
-        right_col.append([item])
-    
-    right_table = Table(right_col, colWidths=[4*inch])
-    right_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (0, -1), 'TOP'),
-    ]))
-    
-    main_table_data = [[left_col, divider, right_table]]
-    main_table = Table(main_table_data, colWidths=[4*inch, 0.1*inch, 4*inch])
-    main_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0.2*inch),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0.2*inch),
-    ]))
-    
-    centered_table = Table([[main_table]], colWidths=[8.2*inch])  
-    centered_table.setStyle(TableStyle([
+    content.append(Spacer(1, 0.3*inch))
+
+    tables_data = [[composition_table, cash_table]]
+    tables_layout = Table(tables_data, colWidths=[4*inch, 4*inch])
+    tables_layout.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0.1*inch),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0.1*inch),
     ]))
     
-    content.append(centered_table)
+    content.append(tables_layout)
     
     return content
 
@@ -390,15 +362,7 @@ def deq(direct_equity, direct_equity_total, etf_equity, etf_equity_total, equity
         fontSize=16,
         alignment=TA_CENTER,
         spaceAfter=6,
-        textColor=HexColor('#990000')
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'NormalStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        alignment=TA_CENTER
+        textColor=HexColor('#3C3EA8')
     )
     
     section_title_style = ParagraphStyle(
@@ -409,24 +373,22 @@ def deq(direct_equity, direct_equity_total, etf_equity, etf_equity_total, equity
         alignment=TA_LEFT,
         spaceAfter=6,
         leftIndent=-60,
-        textColor=HexColor('#990000')
+        textColor=HexColor('#3C3EA8')
     )
     
-    try:
-        table_header_style = styles['TableHeader']
-    except KeyError:
-        table_header_style = styles.add(ParagraphStyle(
-            'TableHeader',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=9,
-            alignment=TA_CENTER
-        ))
+    table_header_style = styles.add(ParagraphStyle(
+        'TableHeader',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        alignment=TA_CENTER,
+        textColor=white
+    ))
     
-    def trim_etf_name(name, max_words=5):
+    def trim_etf_name(name, max_words=2):
         if not isinstance(name, str):
             return str(name)
-        
+        name = name.replace("NIPPON LIFE INDIA AM LTD#", "").strip()
         words = name.split()
         if len(words) <= max_words:
             return name
@@ -435,13 +397,20 @@ def deq(direct_equity, direct_equity_total, etf_equity, etf_equity_total, equity
     def trim_mf_name(name, max_words=3):
         if not isinstance(name, str):
             return str(name)
-        
         words = name.split()
         if len(words) <= max_words:
             return name
         return ' '.join(words[:max_words]) + '...'
     
     def create_table(data, total_data, title_text, column_headers, is_mf=False):
+        column_headers = [
+            'Instrument Name', 
+            'Quantity', 
+            'Buy Price (Sum)', 
+            'CMP (Sum)', 
+            'P&L',  
+            'Market Value'
+        ]
         title = Paragraph(title_text, section_title_style)
         
         headers = [Paragraph(header, table_header_style) for header in column_headers]
@@ -453,51 +422,35 @@ def deq(direct_equity, direct_equity_total, etf_equity, etf_equity_total, equity
                 scheme_name = trim_mf_name(row['Unnamed: 1'])
                 table_data.append([
                     scheme_name,  
-                    str(row['Unnamed: 2']),  
-                    str(row['Unnamed: 3']),  
-                    str(row['Unnamed: 5']),  
-                    str(row['Unnamed: 12']),  
-                    str(row['Unnamed: 6']) 
+                    ist(float(row['Unnamed: 2']), 0) if row['Unnamed: 2'] else '',
+                    ist(float(row['Unnamed: 3']), 0).lstrip(',') if row['Unnamed: 3'] else '',
+                    ist(float(row['Unnamed: 5']), 0).lstrip(',') if row['Unnamed: 5'] else '',
+                    ist(float(row['Unnamed: 12']), 0).lstrip(',') if row['Unnamed: 12'] else '',
+                    ist(float(row['Unnamed: 6']), 0) if row['Unnamed: 6'] else ''
                 ])
             else:
                 instrument_name = trim_etf_name(row['Unnamed: 0'])
                 table_data.append([
                     instrument_name,  
-                    str(row['Unnamed: 1']),  
-                    str(row['Unnamed: 2']),  
-                    str(row['Unnamed: 4']),  
-                    str(row['Unnamed: 10']),  
-                    str(row['Unnamed: 5'])  
+                    ist(float(row['Unnamed: 1']), 0) if row['Unnamed: 1'] else '',
+                    ist(float(row['Unnamed: 2']), 0).lstrip(',') if row['Unnamed: 2'] else '',
+                    ist(float(row['Unnamed: 4']), 0).lstrip(',') if row['Unnamed: 4'] else '',
+                    ist(float(row['Unnamed: 10']), 0).lstrip(',') if row['Unnamed: 10'] else '',
+                    ist(float(row['Unnamed: 5']), 0) if row['Unnamed: 5'] else ''
                 ])
         
-        if is_mf:
-            table_data.append([
-                'Total:',
-                total_data[1] if len(total_data) > 1 else '',
-                total_data[2] if len(total_data) > 2 else '',
-                total_data[3] if len(total_data) > 3 else '',
-                total_data[5] if len(total_data) > 5 else '',
-                total_data[4] if len(total_data) > 4 else ''   
-            ])
-        else:
-            table_data.append([
-                'Total:',
-                total_data[1] if len(total_data) > 1 else '',
-                total_data[2] if len(total_data) > 2 else '',
-                total_data[3] if len(total_data) > 3 else '',
-                total_data[5] if len(total_data) > 5 else '',  
-                total_data[4] if len(total_data) > 4 else ''   
-            ])
+        total_row = ['Total:'] + [ist(float(val), 0) if i > 0 and isinstance(val, (int, float)) else val for i, val in enumerate(total_data[1:])]
+        table_data.append(total_row)
         
         table_style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, 0), 'RIGHT'),
+            ('BACKGROUND', (0, 0), (-1, 0), HexColor('#3C3EA8')),
+            ('BACKGROUND', (0, -1), (-1, -1), HexColor('#3C3EA8')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),
+            ('TEXTCOLOR', (0, -1), (-1, -1), white),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),  
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),    
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ALIGN', (1, 1), (-1, -1), 'CENTER')  
@@ -515,35 +468,34 @@ def deq(direct_equity, direct_equity_total, etf_equity, etf_equity_total, equity
         table = Table(table_data, colWidths=column_widths)
         table.setStyle(table_style)
         
-        spacer = Spacer(1, 10)
+        spacer = Spacer(1, 5)
         
-        return [title, spacer, table, spacer, spacer]
+        return [title, spacer, table]
     
     page_elements = [PageBreak()]
     
     page_elements.append(Paragraph("Detailed Holdings & Performance", page_title_style))
     page_elements.append(Spacer(1, 0.1*inch))
-    page_elements.append(Paragraph(f"As on {datetime.now().strftime('%d-%b-%Y')}", subtitle_style))
     
     sections = []
     if not direct_equity.empty:
         sections.append(("Direct Equity", direct_equity, direct_equity_total, 
-                        ['Instrument Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L (Sum)', 'Market Value'], False))
+                        ['Instrument Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L', 'Market Value'], False))
     
     if not etf_equity.empty:
         sections.append(("Equity ETF", etf_equity, etf_equity_total, 
-                        ['ETF Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L (Sum)', 'Market Value'], False))
+                        ['ETF Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L', 'Market Value'], False))
     
     if not equity_mf.empty:
         sections.append(("Equity Mutual Funds", equity_mf, equity_mf_total, 
-                        ['Scheme Name', 'Units', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L (Sum)', 'Market Value'], True))
+                        ['Scheme Name', 'Units', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L', 'Market Value'], True))
     
     for i, (title, data, totals, headers, is_mf) in enumerate(sections):
         table_elements = create_table(data, totals, title, headers, is_mf)
         page_elements.extend(table_elements)
         
         if i < len(sections) - 1:
-            page_elements.append(Spacer(1, 0.01*inch))
+            page_elements.append(Spacer(1, 0.05*inch))  
     
     return page_elements
 
@@ -557,15 +509,7 @@ def deb(debt_etf, debt_etf_total, debt_mf, debt_mf_total, bond_data, bond_total)
         fontSize=16,
         alignment=TA_CENTER,
         spaceAfter=6,
-        textColor=HexColor('#990000')
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'NormalStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        alignment=TA_CENTER
+        textColor=HexColor('#3C3EA8')
     )
     
     section_title_style = ParagraphStyle(
@@ -576,33 +520,21 @@ def deb(debt_etf, debt_etf_total, debt_mf, debt_mf_total, bond_data, bond_total)
         alignment=TA_LEFT,
         spaceAfter=6,
         leftIndent=-60,
-        textColor=HexColor('#990000')
+        textColor=HexColor('#3C3EA8')
     )
     
-    try:
-        table_header_style = styles['TableHeader']
-    except KeyError:
-        table_header_style = styles.add(ParagraphStyle(
-            'TableHeader',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=9,
-            alignment=TA_CENTER
-        ))
+    table_header_style = styles.add(ParagraphStyle(
+        'TableHeader',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        alignment=TA_CENTER,
+        textColor=white
+    ))
     
-    def trim_name(name, max_words=5):
+    def trim_name(name, max_words=3):
         if not isinstance(name, str):
             return str(name)
-        
-        words = name.split()
-        if len(words) <= max_words:
-            return name
-        return ' '.join(words[:max_words]) + '...'
-    
-    def trim_mf_name(name, max_words=3):
-        if not isinstance(name, str):
-            return str(name)
-        
         words = name.split()
         if len(words) <= max_words:
             return name
@@ -617,64 +549,48 @@ def deb(debt_etf, debt_etf_total, debt_mf, debt_mf_total, bond_data, bond_total)
         
         for _, row in data.iterrows():
             if is_mf:
-                scheme_name = trim_mf_name(row['Unnamed: 1'])
+                scheme_name = trim_name(row['Unnamed: 1'])
                 table_data.append([
                     scheme_name,  
-                    str(row['Unnamed: 2']),  
-                    str(row['Unnamed: 3']),  
-                    str(row['Unnamed: 5']),  
-                    str(row['Unnamed: 12']),  
-                    str(row['Unnamed: 6']) 
+                    ist(float(row['Unnamed: 2']), 0) if row['Unnamed: 2'] else '',
+                    ist(float(row['Unnamed: 3']), 0).lstrip(',') if row['Unnamed: 3'] else '',
+                    ist(float(row['Unnamed: 5']), 0).lstrip(',') if row['Unnamed: 5'] else '',
+                    ist(float(row['Unnamed: 12']), 0).lstrip(',') if row['Unnamed: 12'] else '',
+                    ist(float(row['Unnamed: 6']), 0) if row['Unnamed: 6'] else ''
                 ])
             elif is_bond:
                 bond_name = trim_name(row['Unnamed: 0'])
                 table_data.append([
                     bond_name,  
-                    str(row['Unnamed: 1']),  
-                    str(row['Unnamed: 2']),  
-                    str(row['Unnamed: 4']),  
-                    str(row['Unnamed: 10']),  
-                    str(row['Unnamed: 5'])  
+                    ist(float(row['Unnamed: 1']), 0).lstrip(',') if row['Unnamed: 1'] else '',
+                    ist(float(row['Unnamed: 2']), 0).lstrip(',') if row['Unnamed: 2'] else '',
+                    ist(float(row['Unnamed: 4']), 0).lstrip(',') if row['Unnamed: 4'] else '',
+                    ist(float(row['Unnamed: 10']), 0).lstrip(',') if row['Unnamed: 10'] else '',
+                    ist(float(row['Unnamed: 5']), 0) if row['Unnamed: 5'] else ''
                 ])
             else:
                 instrument_name = trim_name(row['Unnamed: 0'])
                 table_data.append([
                     instrument_name,  
-                    str(row['Unnamed: 1']),  
-                    str(row['Unnamed: 2']),  
-                    str(row['Unnamed: 4']),  
-                    str(row['Unnamed: 10']),  
-                    str(row['Unnamed: 5'])  
+                    ist(float(row['Unnamed: 1']), 0) if row['Unnamed: 1'] else '',
+                    ist(float(row['Unnamed: 2']), 0).lstrip(',') if row['Unnamed: 2'] else '',
+                    ist(float(row['Unnamed: 4']), 0).lstrip(',') if row['Unnamed: 4'] else '',
+                    ist(float(row['Unnamed: 10']), 0).lstrip(',') if row['Unnamed: 10'] else '',
+                    ist(float(row['Unnamed: 5']), 0) if row['Unnamed: 5'] else ''
                 ])
         
-        if is_mf:
-            table_data.append([
-                'Total:',
-                total_data[1] if len(total_data) > 1 else '',
-                total_data[2] if len(total_data) > 2 else '',
-                total_data[3] if len(total_data) > 3 else '',
-                total_data[5] if len(total_data) > 5 else '',
-                total_data[4] if len(total_data) > 4 else ''   
-            ])
-        else:
-            table_data.append([
-                'Total:',
-                total_data[1] if len(total_data) > 1 else '',
-                total_data[2] if len(total_data) > 2 else '',
-                total_data[3] if len(total_data) > 3 else '',
-                total_data[5] if len(total_data) > 5 else '',  
-                total_data[4] if len(total_data) > 4 else ''   
-            ])
+        total_row = ['Total:'] + [ist(float(val), 0).lstrip(',') if i > 0 and isinstance(val, (int, float)) else val for i, val in enumerate(total_data[1:])]
+        table_data.append(total_row)
         
         table_style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, 0), 'RIGHT'),
+            ('BACKGROUND', (0, 0), (-1, 0), HexColor('#3C3EA8')),
+            ('BACKGROUND', (0, -1), (-1, -1), HexColor('#3C3EA8')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),
+            ('TEXTCOLOR', (0, -1), (-1, -1), white),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),  
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),    
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ALIGN', (1, 1), (-1, -1), 'CENTER')  
@@ -700,20 +616,19 @@ def deb(debt_etf, debt_etf_total, debt_mf, debt_mf_total, bond_data, bond_total)
     
     page_elements.append(Paragraph("Debt Holdings & Performance", page_title_style))
     page_elements.append(Spacer(1, 0.1*inch))
-    page_elements.append(Paragraph(f"As on {datetime.now().strftime('%d-%b-%Y')}", subtitle_style))
     
     sections = []
     if not debt_etf.empty:
         sections.append(("Debt ETF", debt_etf, debt_etf_total, 
-                        ['ETF Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L (Sum)', 'Market Value'], False))
+                        ['ETF Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L', 'Market Value'], False))
     
     if not debt_mf.empty:
         sections.append(("Debt Mutual Funds", debt_mf, debt_mf_total, 
-                        ['Scheme Name', 'Units', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L (Sum)', 'Market Value'], True))
+                        ['Scheme Name', 'Units', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L', 'Market Value'], True))
     
     if not bond_data.empty:
         sections.append(("Bonds", bond_data, bond_total, 
-                        ['Bond Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L (Sum)', 'Market Value'], False, True))
+                        ['Bond Name', 'Quantity', 'Buy Price (Sum)', 'CMP (Sum)', 'P&L', 'Market Value'], False, True))
     
     for i, (title, data, totals, headers, is_mf, *args) in enumerate(sections):
         is_bond = args[0] if args else False
@@ -724,6 +639,45 @@ def deb(debt_etf, debt_etf_total, debt_mf, debt_mf_total, bond_data, bond_total)
             page_elements.append(Spacer(1, 0.01*inch))
     
     return page_elements
+
+def ist(number, decimal_places=0):
+    try:
+        num = float(number)
+        num = round(num, decimal_places)
+        
+        negative = num < 0
+        num = abs(num)
+        
+        if decimal_places == 0:
+            num = int(num)
+        
+        int_part = str(int(num))
+        
+        result = ""
+        if len(int_part) <= 3:
+            result = int_part
+        else:
+            result = int_part[-3:]
+            remaining = int_part[:-3]
+            i = len(remaining)
+            while i > 0:
+                if i >= 2:
+                    result = remaining[i-2:i] + "," + result
+                else:
+                    result = remaining[i-1:i] + "," + result
+                i -= 2
+        
+        if decimal_places > 0:
+            decimal_part = f"{num % 1:.{decimal_places}f}"[2:]
+            result = result + "." + decimal_part
+        
+        if negative:
+            result = "-" + result
+            
+        return result
+    
+    except Exception as e:
+        return str(number)
 
 def report_gen(df1, df2, df3=None, output_path=None):
     info_row = df1[df1['Unnamed: 0'] == 'Client Equity Code/UCID/Name'].index[0]
